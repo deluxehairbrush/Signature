@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { extractTextFromImage, isLowConfidence, getConfidenceMessage, type OCRProgress } from '../../lib/ocr';
+import { extractTextFromImage, isLowConfidence, getConfidenceMessage } from '../../lib/ocr';
+import { describeError } from '../../lib/errors';
 
 export default function TestOCR() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -10,12 +11,15 @@ export default function TestOCR() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrStatus, setOcrStatus] = useState('');
+  const [ocrError, setOcrError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (file: File) => {
+    setOcrError(null);
+
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+      setOcrError('That file is not an image. Please select a screenshot image.');
       return;
     }
 
@@ -23,6 +27,11 @@ export default function TestOCR() {
     const reader = new FileReader();
     reader.onload = (e) => {
       setPreviewImage(e.target?.result as string);
+    };
+    reader.onerror = () => {
+      console.error('Failed to read the selected image for preview:', reader.error);
+      setPreviewImage(null);
+      setOcrError('Could not read the selected image, so no preview is shown.');
     };
     reader.readAsDataURL(file);
 
@@ -42,7 +51,7 @@ export default function TestOCR() {
       setOcrConfidence(result.confidence);
     } catch (error) {
       console.error('OCR failed:', error);
-      alert('Failed to extract text from image.');
+      setOcrError(describeError(error));
     } finally {
       setIsProcessing(false);
     }
@@ -74,9 +83,13 @@ export default function TestOCR() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer?.files[0];
-    if (file && file.type.startsWith('image/')) {
-      handleFileSelect(file);
+
+    if (!file) {
+      setOcrError('No image was found in the drop. Please try again.');
+      return;
     }
+
+    handleFileSelect(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -87,6 +100,7 @@ export default function TestOCR() {
     setOcrText('');
     setOcrConfidence(0);
     setPreviewImage(null);
+    setOcrError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -101,6 +115,24 @@ export default function TestOCR() {
         </div>
 
         <div style={{ backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', padding: '1.5rem' }}>
+          {/* Error */}
+          {ocrError && (
+            <div
+              role="alert"
+              style={{
+                marginBottom: '1rem',
+                padding: '1rem',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: '0.5rem',
+                color: '#b91c1c',
+                fontSize: '0.875rem',
+              }}
+            >
+              {ocrError}
+            </div>
+          )}
+
           {/* File Upload Zone */}
           {!previewImage && (
             <div

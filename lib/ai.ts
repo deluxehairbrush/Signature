@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { z } from "zod";
+import { AiConfigError, AiResponseError, describeError } from "./errors";
 
 const MODEL = "llama-3.3-70b-versatile";
 let groq: OpenAI | null = null;
@@ -24,6 +25,11 @@ export type DealSummary = z.infer<typeof dealSummarySchema>;
 export type RedFlagResult = {
   hasRedFlags: boolean;
   flags: { field: string; issue: string }[];
+  /**
+   * True when the deterministic checks ran but the optional AI scope review
+   * could not complete, so the flag list may be incomplete.
+   */
+  scopeReviewUnavailable: boolean;
 };
 
 export type Deal = {
@@ -156,6 +162,7 @@ export async function chatToContract(rawText: string): Promise<DealSummary> {
 
 export async function redFlagCheck(deal: DealSummary): Promise<RedFlagResult> {
   const flags: RedFlagResult["flags"] = [];
+  let scopeReviewUnavailable = false;
 
   if (deal.price == null || !Number.isFinite(deal.price) || deal.price <= 0) {
     flags.push({ field: "price", issue: "Missing or invalid price." });
@@ -177,12 +184,20 @@ export async function redFlagCheck(deal: DealSummary): Promise<RedFlagResult> {
       issue: "Scope is very short and may be too vague.",
     });
   } else if (needsVagueScopeJudgment(deal.scope)) {
-    const scopeResult = await callJsonWithRetry({
-      schema: redFlagSchema,
-      systemPrompt: vagueScopePrompt,
-      userPrompt: `Scope:\n${deal.scope}`,
-    });
-    flags.push(...scopeResult.flags);
+    // The AI scope review only adds an extra flag, so a provider failure must
+    // not discard the deterministic flags already collected. Report the gap
+    // through scopeReviewUnavailable instead of dropping it.
+    try {
+      const scopeResult = await callJsonWithRetry({
+        schema: redFlagSchema,
+        systemPrompt: vagueScopePrompt,
+        userPrompt: `Scope:\n${deal.scope}`,
+      });
+      flags.push(...scopeResult.flags);
+    } catch (error) {
+      console.error("AI scope review failed, returning deterministic flags only", error);
+      scopeReviewUnavailable = true;
+    }
   }
 
   if (
@@ -199,6 +214,7 @@ export async function redFlagCheck(deal: DealSummary): Promise<RedFlagResult> {
   return {
     hasRedFlags: flags.length > 0,
     flags,
+    scopeReviewUnavailable,
   };
 }
 
@@ -270,8 +286,12 @@ async function callJsonWithRetry<T>({
     return retryParse.data;
   }
 
-  const retryError = retryParse.error;
-  throw new Error(`Groq JSON response failed validation: ${retryError}`);
+  // Keep both attempts in the message and the last underlying failure as
+  // `cause` so the server log explains why the response was rejected.
+  throw new AiResponseError(
+    `Groq JSON response failed validation twice. First attempt: ${firstError}. Retry: ${retryParse.error}`,
+    { cause: retryParse.cause },
+  );
 }
 
 async function requestJson(systemPrompt: string, userPrompt: string): Promise<string> {
@@ -285,10 +305,13 @@ async function requestJson(systemPrompt: string, userPrompt: string): Promise<st
     ],
   });
 
-  const content = response.choices[0]?.message?.content;
+  const choice = response.choices[0];
+  const content = choice?.message?.content;
 
   if (!content) {
-    throw new Error("Groq returned an empty response.");
+    throw new AiResponseError(
+      `Groq returned an empty response (finish_reason: ${choice?.finish_reason ?? "none"}).`,
+    );
   }
 
   return content;
@@ -298,7 +321,7 @@ function getGroqClient(): OpenAI {
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
-    throw new Error("Missing GROQ_API_KEY environment variable.");
+    throw new AiConfigError("Missing GROQ_API_KEY environment variable.");
   }
 
   groq ??= new OpenAI({
@@ -327,21 +350,24 @@ function normalizeMissingFields(summary: DealSummary): DealSummary {
 function parseAndValidateJson<T>(
   content: string,
   schema: z.ZodType<T>,
-): { success: true; data: T } | { success: false; error: string } {
+):
+  | { success: true; data: T }
+  | { success: false; error: string; cause?: unknown } {
   try {
     const parsed = normalizeJsonCandidate(JSON.parse(extractJsonObject(content)));
     const validation = schema.safeParse(parsed);
 
     if (!validation.success) {
-      return { success: false, error: validation.error.message };
+      return {
+        success: false,
+        error: validation.error.message,
+        cause: validation.error,
+      };
     }
 
     return { success: true, data: validation.data };
   } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown JSON parse error",
-    };
+    return { success: false, error: describeError(error), cause: error };
   }
 }
 

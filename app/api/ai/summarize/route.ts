@@ -31,6 +31,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, deal });
   } catch (error) {
     console.error("Failed to summarize chat with AI", error);
-    return aiFailureResponse(error);
+    return aiFailureResponse(error, "summary");
   }
 }

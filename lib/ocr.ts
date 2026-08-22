@@ -1,4 +1,5 @@
 import Tesseract from 'tesseract.js';
+import { OcrError } from './errors';
 
 export interface OCRResult {
   text: string;
@@ -34,6 +35,11 @@ function getWorker(): Promise<Tesseract.Worker> {
         });
       }
     },
+    // Tesseract reports worker-level failures here; without a handler they are
+    // only logged inside the worker.
+    errorHandler: (workerError: unknown) => {
+      console.error('Tesseract worker error:', workerError);
+    },
   });
 
   return workerPromise;
@@ -44,6 +50,7 @@ function getWorker(): Promise<Tesseract.Worker> {
  * @param image - Browser File/Blob, or a Buffer/path for headless (Node) use
  * @param onProgress - Optional callback for progress updates
  * @returns Promise with extracted text and confidence score
+ * @throws OcrError when recognition fails or the image contains no text
  */
 export async function extractTextFromImage(
   image: File | Blob | Buffer | string,
@@ -58,15 +65,24 @@ export async function extractTextFromImage(
     const result = await worker.recognize(imageUrl ?? image);
 
     const confidence = result.data.confidence;
-    const text = result.data.text.trim();
+    const text = result.data.text?.trim() ?? '';
 
-    return {
-      text,
-      confidence,
-    };
+    if (!text) {
+      throw new OcrError('No readable text was found in the image.');
+    }
+
+    return { text, confidence };
   } catch (error) {
-    console.error('OCR extraction failed:', error);
-    throw new Error('Failed to extract text from image. Please try again or use manual text input.');
+    if (error instanceof OcrError) {
+      throw error;
+    }
+
+    // Keep the original failure as `cause` so callers can log the real reason
+    // while showing the user-facing message.
+    throw new OcrError(
+      'Failed to extract text from image. Please try again or use manual text input.',
+      { cause: error }
+    );
   } finally {
     if (imageUrl) {
       URL.revokeObjectURL(imageUrl);
