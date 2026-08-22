@@ -28,6 +28,15 @@ Signature provides intelligent tools to convert informal chat conversations into
 - Falls back to IP-based limiting for unauthenticated requests
 - Prevents quota abuse during testing and development
 
+### 🏆 Public Trust Badges
+- **GET `/badge/[username]`** - Public endpoint for user reputation badges
+- **GET `/badge/[username].svg`** - Same endpoint with .svg extension for embed contexts
+- Generates SVG badges showing trust score and deal count
+- Color-coded: green (70+), yellow (40-69), gray (<40 or no data)
+- No authentication required - designed for public embedding
+- Includes cache headers for performance (public, max-age=300)
+- Graceful error handling - always returns valid SVG
+
 ### ⚡ Error Handling
 - Graceful degradation when AI services fail
 - Fallback messages for frontend display
@@ -40,17 +49,24 @@ Signature provides intelligent tools to convert informal chat conversations into
 ```
 Signature/
 ├── app/
-│   └── api/
-│       └── ai/
-│           ├── summarize/
-│           │   └── route.ts    # Chat-to-contract API endpoint
-│           └── redflags/
-│               └── route.ts    # Red flag detection API endpoint
+│   ├── api/
+│   │   └── ai/
+│   │       ├── summarize/
+│   │       │   └── route.ts    # Chat-to-contract API endpoint
+│   │       └── redflags/
+│   │           └── route.ts    # Red flag detection API endpoint
+│   ├── badge/
+│   │   └── [username]/
+│   │       └── route.ts        # Public trust badge endpoint
+│   ├── layout.tsx              # Root layout
+│   └── page.tsx               # Homepage
 ├── lib/
-│   ├── ai.ts                  # Core AI functions (chatToContract, redFlagCheck)
+│   ├── ai.ts                  # Core AI functions (chatToContract, redFlagCheck, computeReputationScore)
 │   └── ai-api.ts              # API utilities (rate limiting, error handling)
 ├── scripts/
-│   └── stress-chat-to-contract.ts  # Testing utilities
+│   ├── stress-chat-to-contract.ts  # AI testing utilities
+│   └── test-badge.ts               # Badge logic testing
+├── next.config.js            # Next.js configuration
 └── package.json
 ```
 
@@ -133,6 +149,36 @@ Analyzes a deal summary for potential red flags.
 }
 ```
 
+### GET /badge/[username]
+
+Generates a public SVG badge showing a user's trust score and deal count.
+
+**Parameters:**
+- `username` (path parameter) - The username to look up
+
+**Response:**
+- Content-Type: `image/svg+xml`
+- Returns an SVG badge with:
+  - Left side: "TrustGig" label
+  - Right side: Score (e.g., "87/100") and deal count (e.g., "12 deals")
+  - Color-coded based on score:
+    - Green (#10B981): Score 70+
+    - Yellow (#F59E0B): Score 40-69
+    - Gray (#9CA3AF): Score <40 or no data
+
+**Headers:**
+- `Cache-Control: public, max-age=300, s-maxage=600`
+- `Access-Control-Allow-Origin: *`
+
+**Examples:**
+- `/badge/johndoe` - Returns badge for user "johndoe"
+- `/badge/johndoe.svg` - Same endpoint with .svg extension for embed contexts
+
+**Behavior:**
+- If username doesn't exist or has no deals, returns "no data" badge
+- Never errors - always returns a valid SVG for embedding
+- Uses mock data currently - needs Supabase integration
+
 ## Implementation Details
 
 ### AI Model
@@ -153,6 +199,15 @@ Analyzes a deal summary for potential red flags.
 - Returns appropriate HTTP status codes
 - Includes fallback messages for frontend display
 - Never blocks the form - allows manual entry as fallback
+
+### Badge System
+- SVG template-based generation (no external dependencies)
+- Shields.io-style badge layout
+- Color coding based on reputation score thresholds
+- Public endpoint with no authentication required
+- Cache headers for performance optimization
+- Graceful degradation - always returns valid SVG
+- Supports both `/badge/[username]` and `/badge/[username].svg` formats
 
 ## Dependencies
 
@@ -188,14 +243,20 @@ npm run dev
 - Comprehensive error handling
 - TypeScript type safety
 - Zod schema validation
+- Public trust badge endpoint with SVG generation
+- Color-coded reputation badges
+- Cache headers for performance
+- Graceful error handling for badge endpoint
 
 🚧 **Future Enhancements:**
+- Supabase integration for badge data fetching
 - Frontend integration
 - User authentication flow
 - Database persistence
 - Additional AI features
 - Unit tests
 - Integration tests
+- Badge customization options
 
 ## License
 
