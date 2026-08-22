@@ -161,10 +161,14 @@ Analyzes a deal summary for potential red flags.
         "field": "string",
         "issue": "string"
       }
-    ]
+    ],
+    "scopeReviewUnavailable": "boolean"
   }
 }
 ```
+
+`scopeReviewUnavailable` is `true` when the deterministic checks ran but the
+optional AI scope review failed, so the flag list may be incomplete.
 
 ### GET /badge/[username]
 
@@ -193,7 +197,10 @@ Generates a public SVG badge showing a user's trust score and deal count.
 
 **Behavior:**
 - If username doesn't exist or has no deals, returns "no data" badge
-- Never errors - always returns a valid SVG for embedding
+- Always returns a valid SVG for embedding, never an error page
+- If the reputation lookup fails, returns an "unavailable" badge with
+  `X-Badge-Status: reputation-unavailable` and `Cache-Control: no-store`, so a
+  failure is never cached or mistaken for "no data"
 - Uses mock data currently - needs Supabase integration
 
 ## OCR Integration
@@ -274,10 +281,17 @@ Visit `/test-ocr` to test OCR functionality with:
 - IP fallback for unauthenticated requests
 
 ### Error Handling
-- Distinguishes between timeout, rate limit, and general errors
-- Returns appropriate HTTP status codes
+- Typed errors (`AiConfigError`, `AiResponseError`, `OcrError` in `lib/errors.ts`)
+  let each layer map a failure to the right status code and message
+- Distinguishes between misconfiguration (500), timeout (504), provider rate
+  limit (503), unusable AI response (502), and bad requests (400)
+- Error messages name the failed operation instead of always reporting a
+  summary failure
 - Includes fallback messages for frontend display
 - Never blocks the form - allows manual entry as fallback
+- Client requests check the HTTP status and payload shape, so a non-JSON or
+  unexpected response is reported instead of being shown as a network error
+- `app/error.tsx` renders uncaught render errors with a retry action
 
 ### OCR Implementation
 - Client-side processing using tesseract.js (no server costs)

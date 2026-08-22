@@ -1,4 +1,5 @@
 import Tesseract from 'tesseract.js';
+import { OcrError } from './errors';
 
 export interface OCRResult {
   text: string;
@@ -17,50 +18,63 @@ export type OCRProgressCallback = (progress: OCRProgress) => void;
  * @param file - Image file to process
  * @param onProgress - Optional callback for progress updates
  * @returns Promise with extracted text and confidence score
+ * @throws OcrError when recognition fails or the image contains no text
  */
 export async function extractTextFromImage(
   file: File,
   onProgress?: OCRProgressCallback
 ): Promise<OCRResult> {
-  try {
-    // Convert file to appropriate format for Tesseract
-    const imageUrl = URL.createObjectURL(file);
+  // Convert file to appropriate format for Tesseract
+  const imageUrl = URL.createObjectURL(file);
 
+  try {
     // Perform OCR with progress tracking
     const result = await Tesseract.recognize(
       imageUrl,
       'eng', // English language - can add more languages if needed
       {
-        logger: (message: any) => {
-          if (onProgress && message.status === 'recognizing text') {
-            onProgress({
-              status: message.status,
-              progress: message.progress * 100,
-            });
-          } else if (onProgress) {
-            onProgress({
-              status: message.status,
-              progress: 0,
-            });
+        logger: (message: Tesseract.LoggerMessage) => {
+          if (!onProgress) {
+            return;
           }
+
+          onProgress({
+            status: message.status,
+            progress: message.status === 'recognizing text' ? message.progress * 100 : 0,
+          });
+        },
+        // Tesseract reports worker-level failures here; without a handler they
+        // are only logged inside the worker and the promise can hang.
+        errorHandler: (workerError: unknown) => {
+          console.error('Tesseract worker error:', workerError);
         },
       }
     );
 
-    // Clean up the object URL
-    URL.revokeObjectURL(imageUrl);
+    const text = result.data.text?.trim() ?? '';
 
-    // Extract confidence and text
-    const confidence = result.data.confidence;
-    const text = result.data.text.trim();
+    if (!text) {
+      throw new OcrError('No readable text was found in the image.');
+    }
 
     return {
       text,
-      confidence,
+      confidence: result.data.confidence,
     };
   } catch (error) {
-    console.error('OCR extraction failed:', error);
-    throw new Error('Failed to extract text from image. Please try again or use manual text input.');
+    if (error instanceof OcrError) {
+      throw error;
+    }
+
+    // Keep the original failure as `cause` so callers can log the real reason
+    // while showing the user-facing message.
+    throw new OcrError(
+      'Failed to extract text from image. Please try again or use manual text input.',
+      { cause: error }
+    );
+  } finally {
+    // Always release the object URL, including on the failure path.
+    URL.revokeObjectURL(imageUrl);
   }
 }
 

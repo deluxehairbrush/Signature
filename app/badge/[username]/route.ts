@@ -63,15 +63,42 @@ function generateNoDataBadge(): string {
   return generateBadgeSvg("TrustGig", "no data", 0, "#9CA3AF");
 }
 
+function generateUnavailableBadge(): string {
+  return generateBadgeSvg("TrustGig", "unavailable", 0, "#9CA3AF");
+}
+
+function svgResponse(
+  svg: string,
+  { cacheControl, error }: { cacheControl: string; error?: string },
+): NextResponse {
+  return new NextResponse(svg, {
+    headers: {
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": cacheControl,
+      "Access-Control-Allow-Origin": "*",
+      // Lets embedders and monitoring tell a degraded badge apart from a
+      // genuine "no deals yet" badge, which both render as an image.
+      ...(error ? { "X-Badge-Status": error } : {}),
+    },
+  });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ username: string }> }
 ) {
   const { username } = await params;
-  
+
   // Remove .svg extension if present
   const cleanUsername = username.replace(/\.svg$/, '');
-  
+
+  if (!cleanUsername.trim()) {
+    return svgResponse(generateNoDataBadge(), {
+      cacheControl: "public, max-age=300, s-maxage=600",
+      error: "invalid-username",
+    });
+  }
+
   try {
     // Fetch user's deals from Supabase
     const deals = await fetchUserDeals(cleanUsername);
@@ -95,24 +122,18 @@ export async function GET(
     }
     
     // Return SVG with appropriate headers
-    return new NextResponse(svg, {
-      headers: {
-        "Content-Type": "image/svg+xml",
-        "Cache-Control": "public, max-age=300, s-maxage=600",
-        "Access-Control-Allow-Origin": "*",
-      },
+    return svgResponse(svg, {
+      cacheControl: "public, max-age=300, s-maxage=600",
     });
   } catch (error) {
-    console.error("Error generating badge:", error);
-    
-    // Always return a valid SVG, never error
-    const noDataSvg = generateNoDataBadge();
-    return new NextResponse(noDataSvg, {
-      headers: {
-        "Content-Type": "image/svg+xml",
-        "Cache-Control": "public, max-age=60", // Shorter cache on errors
-        "Access-Control-Allow-Origin": "*",
-      },
+    console.error(`Failed to generate badge for "${cleanUsername}"`, error);
+
+    // Badges are embedded as images, so the endpoint still renders SVG instead
+    // of an error page. It must not claim "no data": the reputation lookup
+    // failed, so say so and keep the failure out of shared caches.
+    return svgResponse(generateUnavailableBadge(), {
+      cacheControl: "no-store",
+      error: "reputation-unavailable",
     });
   }
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { extractTextFromImage, isLowConfidence, getConfidenceMessage, type OCRProgress } from '../../lib/ocr';
+import { extractTextFromImage, isLowConfidence, getConfidenceMessage } from '../../lib/ocr';
+import { describeError } from '../../lib/errors';
 
 interface DealFormProps {
   onSubmit: (rawText: string) => Promise<void>;
@@ -20,27 +21,43 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
   const [ocrStatus, setOcrStatus] = useState('');
   const [showWarning, setShowWarning] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
+  // Rejections from onSubmit are not caught by React error boundaries, so
+  // surface them in the form instead of leaving an unhandled rejection.
+  const submitText = async (text: string) => {
+    setFormError(null);
+
+    try {
+      await onSubmit(text);
+    } catch (error) {
+      console.error('Submitting the conversation failed:', error);
+      setFormError(describeError(error) || 'Could not submit the conversation.');
+    }
+  };
+
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (rawText.trim()) {
-      await onSubmit(rawText);
+      await submitText(rawText);
     }
   };
 
   const handleOCRSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (ocrText.trim()) {
-      await onSubmit(ocrText);
+      await submitText(ocrText);
     }
   };
 
   const handleFileSelect = async (file: File) => {
+    setFormError(null);
+
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+      setFormError('That file is not an image. Please select a screenshot image.');
       return;
     }
 
@@ -48,6 +65,11 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
     const reader = new FileReader();
     reader.onload = (e) => {
       setPreviewImage(e.target?.result as string);
+    };
+    reader.onerror = () => {
+      console.error('Failed to read the selected image for preview:', reader.error);
+      setPreviewImage(null);
+      setFormError('Could not read the selected image, so no preview is shown.');
     };
     reader.readAsDataURL(file);
 
@@ -69,7 +91,7 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
       setShowWarning(isLowConfidence(result.confidence));
     } catch (error) {
       console.error('OCR failed:', error);
-      alert('Failed to extract text from image. Please try again or use manual text input.');
+      setFormError(describeError(error));
     } finally {
       setIsProcessing(false);
     }
@@ -101,9 +123,13 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer?.files[0];
-    if (file && file.type.startsWith('image/')) {
-      handleFileSelect(file);
+
+    if (!file) {
+      setFormError('No image was found in the drop. Please try again.');
+      return;
     }
+
+    handleFileSelect(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -115,6 +141,7 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
     setOcrConfidence(0);
     setPreviewImage(null);
     setShowWarning(false);
+    setFormError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -124,6 +151,23 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
     <div style={{ maxWidth: '42rem', margin: '0 auto', padding: '1.5rem' }}>
       <div style={{ backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)', padding: '1.5rem' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '1.5rem' }}>Create Deal from Chat</h2>
+
+        {formError && (
+          <div
+            role="alert"
+            style={{
+              marginBottom: '1.5rem',
+              padding: '1rem',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '0.5rem',
+              color: '#b91c1c',
+              fontSize: '0.875rem',
+            }}
+          >
+            {formError}
+          </div>
+        )}
         
         {/* Input Mode Toggle */}
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -132,6 +176,7 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
             onClick={() => {
               setInputMode('text');
               resetOCR();
+              setFormError(null);
             }}
             style={{
               flex: 1,
@@ -152,6 +197,7 @@ export default function DealForm({ onSubmit, isLoading = false }: DealFormProps)
             onClick={() => {
               setInputMode('image');
               setRawText('');
+              setFormError(null);
             }}
             style={{
               flex: 1,

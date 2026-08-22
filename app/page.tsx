@@ -3,8 +3,38 @@
 import { useState } from 'react';
 import DealForm from './components/DealForm';
 
+type DealSummaryView = {
+  freelancerName: string | null;
+  clientName: string | null;
+  scope: string;
+  price: number | null;
+  currency: string;
+  deadline: string | null;
+  paymentTerms: string | null;
+  revisions: string | null;
+  confidence: string;
+  missingFields: string[];
+};
+
+type SummarizeResponse = {
+  ok?: boolean;
+  deal?: DealSummaryView;
+  error?: string;
+};
+
+// An error page or proxy can answer with HTML, so a failed parse must not be
+// reported as the request itself failing.
+async function readJson(response: Response): Promise<SummarizeResponse | null> {
+  try {
+    return (await response.json()) as SummarizeResponse;
+  } catch (error) {
+    console.error(`Could not parse the response from ${response.url}:`, error);
+    return null;
+  }
+}
+
 export default function Home() {
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<DealSummaryView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -22,15 +52,22 @@ export default function Home() {
         body: JSON.stringify({ rawText }),
       });
 
-      const data = await response.json();
+      const data = await readJson(response);
 
-      if (data.ok) {
-        setResult(data.deal);
-      } else {
-        setError(data.error || 'Failed to process the chat');
+      if (!response.ok) {
+        setError(data?.error || `The server rejected the request (status ${response.status}).`);
+        return;
       }
+
+      if (!data?.ok || !data.deal) {
+        setError(data?.error || 'The server returned an unexpected response.');
+        return;
+      }
+
+      setResult(data.deal);
     } catch (err) {
-      setError('Network error. Please try again.');
+      console.error('Summarize request failed:', err);
+      setError('Network error. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -108,7 +145,7 @@ export default function Home() {
                 <div>
                   <span style={{ fontWeight: '500', color: '#374151' }}>Missing Fields:</span>
                   <span style={{ marginLeft: '0.5rem' }}>
-                    {result.missingFields.length > 0 ? result.missingFields.join(', ') : 'None'}
+                    {result.missingFields?.length ? result.missingFields.join(', ') : 'None'}
                   </span>
                 </div>
               </div>

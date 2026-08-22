@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { AiConfigError, AiResponseError } from "./errors";
 
 const FALLBACK_MESSAGE =
   "Couldn't auto-generate the summary, you can fill it in manually";
@@ -33,26 +34,40 @@ export async function parseJsonBody<T>(
   request: NextRequest,
   schema: z.ZodType<T>,
 ): Promise<{ success: true; data: T } | { success: false; response: NextResponse }> {
-  try {
-    const body = await request.json();
-    const parsed = schema.safeParse(body);
+  let body: unknown;
 
-    if (!parsed.success) {
+  try {
+    body = await request.json();
+  } catch (error) {
+    // Malformed JSON is a client mistake; anything else (aborted upload,
+    // unreadable stream) is worth logging instead of being reported as bad JSON.
+    if (error instanceof SyntaxError) {
       return {
         success: false,
-        response: jsonError(400, "Invalid request body.", {
-          issues: parsed.error.issues,
-        }),
+        response: jsonError(400, "Request body must be valid JSON."),
       };
     }
 
-    return { success: true, data: parsed.data };
-  } catch {
+    console.error("Failed to read request body", error);
+
     return {
       success: false,
-      response: jsonError(400, "Request body must be valid JSON."),
+      response: jsonError(400, "Could not read the request body."),
     };
   }
+
+  const parsed = schema.safeParse(body);
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      response: jsonError(400, "Invalid request body.", {
+        issues: parsed.error.issues,
+      }),
+    };
+  }
+
+  return { success: true, data: parsed.data };
 }
 
 export function enforceRateLimit(request: NextRequest, action: string) {
@@ -93,7 +108,18 @@ export function enforceRateLimit(request: NextRequest, action: string) {
   return null;
 }
 
-export function aiFailureResponse(error: unknown) {
+/**
+ * Maps an AI failure to a status code and message. `action` names the failed
+ * operation (for example "summary") so callers do not report a generic
+ * summary error for every AI route.
+ */
+export function aiFailureResponse(error: unknown, action: string) {
+  if (error instanceof AiConfigError) {
+    // Configuration details stay in the server log; the client only learns the
+    // request cannot succeed until an operator fixes the deployment.
+    return jsonError(500, "The AI service is not configured on the server.");
+  }
+
   const status = getErrorStatus(error);
 
   if (status === 429) {
@@ -101,10 +127,14 @@ export function aiFailureResponse(error: unknown) {
   }
 
   if (status === 408 || isTimeoutError(error)) {
-    return jsonError(504, "Groq timed out while generating the AI response.");
+    return jsonError(504, `Groq timed out while generating the ${action}.`);
   }
 
-  return jsonError(502, "AI summary generation failed.");
+  if (error instanceof AiResponseError) {
+    return jsonError(502, `Groq returned an unusable ${action}.`);
+  }
+
+  return jsonError(502, `AI ${action} generation failed.`);
 }
 
 function getRequesterId(request: NextRequest): string {
@@ -133,6 +163,8 @@ function getJwtSubject(token: string): string | null {
     const decoded = JSON.parse(base64UrlDecode(payload)) as { sub?: unknown };
     return typeof decoded.sub === "string" && decoded.sub ? decoded.sub : null;
   } catch {
+    // An unreadable token is not an error here: rate limiting falls back to the
+    // caller IP, and the token is never trusted for authorization.
     return null;
   }
 }
