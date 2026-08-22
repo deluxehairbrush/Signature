@@ -68,7 +68,18 @@ export async function parseJsonBody<T>(
 export function enforceRateLimit(request: NextRequest, action: string) {
   const key = `${action}:${getRequesterId(request)}`;
   const now = Date.now();
-  pruneExpiredBuckets(now);
+
+  // Per-process memory only: on serverless (Vercel) each instance has its own
+  // map, so the effective limit is RATE_LIMIT_MAX_REQUESTS * instances. Fine
+  // as a basic abuse guard, not a hard quota.
+  if (rateLimitBuckets.size > 10_000) {
+    for (const [bucketKey, existingBucket] of rateLimitBuckets) {
+      if (existingBucket.resetAt <= now) {
+        rateLimitBuckets.delete(bucketKey);
+      }
+    }
+  }
+
   const bucket = rateLimitBuckets.get(key);
 
   if (!bucket || bucket.resetAt <= now) {
@@ -118,22 +129,20 @@ export function aiFailureResponse(error: unknown) {
   return jsonError(502, "AI summary generation failed.");
 }
 
-// Rate limiting must key on values the client cannot freely choose. A JWT is
-// only trustworthy after signature verification, so identity-based keys belong
-// behind real auth middleware, not here.
 function getRequesterId(request: NextRequest): string {
+  // Rate-limit identity is IP-based only. The Authorization header's JWT
+  // `sub` claim is NOT trusted here: nothing verifies the token's signature
+  // yet (no Supabase JWT secret is wired up), so trusting an unverified sub
+  // would let anyone mint a fresh rate-limit bucket per request. Revisit once
+  // tokens are verified server-side (e.g. with `jose` against the Supabase
+  // JWT secret) and key on the verified subject instead.
+  //
+  // x-forwarded-for is client-spoofable unless the app sits behind a trusted
+  // proxy that overwrites it (true on Vercel).
   const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const realIp = request.headers.get("x-real-ip");
 
   return `ip:${forwardedFor || realIp || "unknown"}`;
-}
-
-function pruneExpiredBuckets(now: number): void {
-  for (const [key, bucket] of rateLimitBuckets) {
-    if (bucket.resetAt <= now) {
-      rateLimitBuckets.delete(key);
-    }
-  }
 }
 
 function getErrorStatus(error: unknown): number | undefined {

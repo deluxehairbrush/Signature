@@ -1,5 +1,5 @@
 // Basic OCR test without actual images
-import { isLowConfidence, getConfidenceMessage } from '../lib/ocr';
+import { isLowConfidence, getConfidenceMessage } from '../lib/ocr.ts';
 
 console.log('Testing OCR utility functions...\n');
 
