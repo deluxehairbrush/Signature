@@ -12,45 +12,51 @@ export interface OCRProgress {
 
 export type OCRProgressCallback = (progress: OCRProgress) => void;
 
+let workerPromise: Promise<Tesseract.Worker> | null = null;
+let currentProgressCallback: OCRProgressCallback | undefined;
+
+function getWorker(): Promise<Tesseract.Worker> {
+  workerPromise ??= Tesseract.createWorker('eng', undefined, {
+    logger: (message: Tesseract.LoggerMessage) => {
+      if (!currentProgressCallback) {
+        return;
+      }
+
+      if (message.status === 'recognizing text') {
+        currentProgressCallback({
+          status: message.status,
+          progress: message.progress * 100,
+        });
+      } else {
+        currentProgressCallback({
+          status: message.status,
+          progress: 0,
+        });
+      }
+    },
+  });
+
+  return workerPromise;
+}
+
 /**
- * Extract text from an image file using Tesseract.js OCR
- * @param file - Image file to process
+ * Extract text from an image using Tesseract.js OCR
+ * @param image - Browser File/Blob, or a Buffer/path for headless (Node) use
  * @param onProgress - Optional callback for progress updates
  * @returns Promise with extracted text and confidence score
  */
 export async function extractTextFromImage(
-  file: File,
+  image: File | Blob | Buffer | string,
   onProgress?: OCRProgressCallback
 ): Promise<OCRResult> {
+  const usesObjectUrl = typeof Blob !== 'undefined' && image instanceof Blob;
+  const imageUrl = usesObjectUrl ? URL.createObjectURL(image as Blob) : null;
+  currentProgressCallback = onProgress;
+
   try {
-    // Convert file to appropriate format for Tesseract
-    const imageUrl = URL.createObjectURL(file);
+    const worker = await getWorker();
+    const result = await worker.recognize(imageUrl ?? image);
 
-    // Perform OCR with progress tracking
-    const result = await Tesseract.recognize(
-      imageUrl,
-      'eng', // English language - can add more languages if needed
-      {
-        logger: (message: any) => {
-          if (onProgress && message.status === 'recognizing text') {
-            onProgress({
-              status: message.status,
-              progress: message.progress * 100,
-            });
-          } else if (onProgress) {
-            onProgress({
-              status: message.status,
-              progress: 0,
-            });
-          }
-        },
-      }
-    );
-
-    // Clean up the object URL
-    URL.revokeObjectURL(imageUrl);
-
-    // Extract confidence and text
     const confidence = result.data.confidence;
     const text = result.data.text.trim();
 
@@ -61,6 +67,11 @@ export async function extractTextFromImage(
   } catch (error) {
     console.error('OCR extraction failed:', error);
     throw new Error('Failed to extract text from image. Please try again or use manual text input.');
+  } finally {
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+    }
+    currentProgressCallback = undefined;
   }
 }
 
