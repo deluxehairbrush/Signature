@@ -64,13 +64,33 @@ export async function extractTextFromImage(
   }
 }
 
+export const CONFIDENCE_GOOD_THRESHOLD = 80;
+export const CONFIDENCE_ACCEPTABLE_THRESHOLD = 60;
+
+export type ConfidenceLevel = 'good' | 'acceptable' | 'low';
+
+/**
+ * Bucket a raw OCR confidence score (0-100) into a qualitative level
+ */
+export function getConfidenceLevel(confidence: number): ConfidenceLevel {
+  if (confidence >= CONFIDENCE_GOOD_THRESHOLD) {
+    return 'good';
+  }
+
+  if (confidence >= CONFIDENCE_ACCEPTABLE_THRESHOLD) {
+    return 'acceptable';
+  }
+
+  return 'low';
+}
+
 /**
  * Check if OCR confidence is low enough to warrant a warning
  * @param confidence - Confidence score from OCR (0-100)
  * @returns true if confidence is low (< 60)
  */
 export function isLowConfidence(confidence: number): boolean {
-  return confidence < 60;
+  return getConfidenceLevel(confidence) === 'low';
 }
 
 /**
@@ -79,11 +99,12 @@ export function isLowConfidence(confidence: number): boolean {
  * @returns Appropriate warning message
  */
 export function getConfidenceMessage(confidence: number): string {
-  if (confidence >= 80) {
-    return 'Text quality is good';
-  } else if (confidence >= 60) {
-    return 'Text quality is acceptable, but please double-check important numbers';
-  } else {
-    return 'Text quality was low, please carefully review the extracted text especially numbers and prices';
+  switch (getConfidenceLevel(confidence)) {
+    case 'good':
+      return 'Text quality is good';
+    case 'acceptable':
+      return 'Text quality is acceptable, but please double-check important numbers';
+    case 'low':
+      return 'Text quality was low, please carefully review the extracted text especially numbers and prices';
   }
 }
