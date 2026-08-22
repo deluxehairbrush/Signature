@@ -13,54 +13,65 @@ export interface OCRProgress {
 
 export type OCRProgressCallback = (progress: OCRProgress) => void;
 
+let workerPromise: Promise<Tesseract.Worker> | null = null;
+let currentProgressCallback: OCRProgressCallback | undefined;
+
+function getWorker(): Promise<Tesseract.Worker> {
+  workerPromise ??= Tesseract.createWorker('eng', undefined, {
+    logger: (message: Tesseract.LoggerMessage) => {
+      if (!currentProgressCallback) {
+        return;
+      }
+
+      if (message.status === 'recognizing text') {
+        currentProgressCallback({
+          status: message.status,
+          progress: message.progress * 100,
+        });
+      } else {
+        currentProgressCallback({
+          status: message.status,
+          progress: 0,
+        });
+      }
+    },
+    // Tesseract reports worker-level failures here; without a handler they are
+    // only logged inside the worker.
+    errorHandler: (workerError: unknown) => {
+      console.error('Tesseract worker error:', workerError);
+    },
+  });
+
+  return workerPromise;
+}
+
 /**
- * Extract text from an image file using Tesseract.js OCR
- * @param file - Image file to process
+ * Extract text from an image using Tesseract.js OCR
+ * @param image - Browser File/Blob, or a Buffer/path for headless (Node) use
  * @param onProgress - Optional callback for progress updates
  * @returns Promise with extracted text and confidence score
  * @throws OcrError when recognition fails or the image contains no text
  */
 export async function extractTextFromImage(
-  file: File,
+  image: File | Blob | Buffer | string,
   onProgress?: OCRProgressCallback
 ): Promise<OCRResult> {
-  // Convert file to appropriate format for Tesseract
-  const imageUrl = URL.createObjectURL(file);
+  const usesObjectUrl = typeof Blob !== 'undefined' && image instanceof Blob;
+  const imageUrl = usesObjectUrl ? URL.createObjectURL(image as Blob) : null;
+  currentProgressCallback = onProgress;
 
   try {
-    // Perform OCR with progress tracking
-    const result = await Tesseract.recognize(
-      imageUrl,
-      'eng', // English language - can add more languages if needed
-      {
-        logger: (message: Tesseract.LoggerMessage) => {
-          if (!onProgress) {
-            return;
-          }
+    const worker = await getWorker();
+    const result = await worker.recognize(imageUrl ?? image);
 
-          onProgress({
-            status: message.status,
-            progress: message.status === 'recognizing text' ? message.progress * 100 : 0,
-          });
-        },
-        // Tesseract reports worker-level failures here; without a handler they
-        // are only logged inside the worker and the promise can hang.
-        errorHandler: (workerError: unknown) => {
-          console.error('Tesseract worker error:', workerError);
-        },
-      }
-    );
-
+    const confidence = result.data.confidence;
     const text = result.data.text?.trim() ?? '';
 
     if (!text) {
       throw new OcrError('No readable text was found in the image.');
     }
 
-    return {
-      text,
-      confidence: result.data.confidence,
-    };
+    return { text, confidence };
   } catch (error) {
     if (error instanceof OcrError) {
       throw error;
@@ -73,8 +84,10 @@ export async function extractTextFromImage(
       { cause: error }
     );
   } finally {
-    // Always release the object URL, including on the failure path.
-    URL.revokeObjectURL(imageUrl);
+    if (imageUrl) {
+      URL.revokeObjectURL(imageUrl);
+    }
+    currentProgressCallback = undefined;
   }
 }
 

@@ -219,7 +219,8 @@ export async function redFlagCheck(deal: DealSummary): Promise<RedFlagResult> {
 }
 
 export function computeReputationScore(deals: Deal[]): ReputationScore {
-  const dealCount = deals.length;
+  const completedDeals = deals.filter((deal) => deal.status === "completed");
+  const dealCount = completedDeals.length;
 
   if (dealCount === 0) {
     return {
@@ -230,18 +231,23 @@ export function computeReputationScore(deals: Deal[]): ReputationScore {
     };
   }
 
-  const avgRating = clamp(
-    deals.reduce((sum, deal) => sum + normalizeRating(deal.rating), 0) / dealCount,
-    1,
-    5,
-  );
+  const ratedDeals = completedDeals.filter((deal) => hasRating(deal.rating));
+  const avgRating =
+    ratedDeals.length > 0
+      ? clamp(
+          ratedDeals.reduce((sum, deal) => sum + normalizeRating(deal.rating), 0) /
+            ratedDeals.length,
+          1,
+          5,
+        )
+      : 0;
   const onTimePaymentRate =
-    deals.filter((deal) => deal.wasPaidOnTime).length / dealCount;
+    completedDeals.filter((deal) => deal.wasPaidOnTime).length / dealCount;
 
   // Log scaling gives early completed deals meaningful lift while preventing
   // large histories from dominating rating and payment behavior.
   const dealCountScore = clamp(Math.log1p(dealCount) / Math.log1p(20), 0, 1);
-  const ratingScore = (avgRating - 1) / 4;
+  const ratingScore = ratedDeals.length > 0 ? (avgRating - 1) / 4 : 0;
   const combinedScore =
     ratingScore * 0.5 + onTimePaymentRate * 0.3 + dealCountScore * 0.2;
 
@@ -328,21 +334,16 @@ function getGroqClient(): OpenAI {
 }
 
 function normalizeMissingFields(summary: DealSummary): DealSummary {
-  const missingFields = new Set(summary.missingFields);
   const normalizedCurrency = summary.currency.trim() || "INR";
-
-  for (const field of requiredDealFields) {
+  const missingFields = requiredDealFields.filter((field) => {
     const value = summary[field];
-
-    if (value == null || (typeof value === "string" && value.trim() === "")) {
-      missingFields.add(field);
-    }
-  }
+    return value == null || (typeof value === "string" && value.trim() === "");
+  });
 
   return {
     ...summary,
     currency: normalizedCurrency,
-    missingFields: Array.from(missingFields),
+    missingFields,
   };
 }
 
@@ -451,6 +452,10 @@ function isLikelyUnrealisticDeadline(deadline: string, scope: string): boolean {
     /\b\d+\s*(pages|screens|videos|posts|deliverables)\b/.test(lowerScope);
 
   return largeScopeSignal;
+}
+
+function hasRating(rating: number): boolean {
+  return Number.isFinite(rating) && rating > 0;
 }
 
 function normalizeRating(rating: number): number {
