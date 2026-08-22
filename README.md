@@ -28,6 +28,16 @@ Signature provides intelligent tools to convert informal chat conversations into
 - Falls back to IP-based limiting for unauthenticated requests
 - Prevents quota abuse during testing and development
 
+### 🖼️ OCR Screenshot Support
+- **Dual input modes** - Paste chat text OR upload screenshots
+- **Client-side OCR** using tesseract.js (no API key, no server cost)
+- **Multiple upload methods** - File selection, drag & drop, Ctrl+V paste
+- **Progress tracking** - Real-time OCR progress indicator
+- **Confidence scoring** - Quality assessment with user warnings
+- **Editable preview** - Review and correct extracted text before submission
+- **Low-confidence warnings** - Alerts users when text quality is poor
+- **WhatsApp-friendly** - Optimized for chat screenshot extraction
+
 ### 🏆 Public Trust Badges
 - **GET `/badge/[username]`** - Public endpoint for user reputation badges
 - **GET `/badge/[username].svg`** - Same endpoint with .svg extension for embed contexts
@@ -58,14 +68,21 @@ Signature/
 │   ├── badge/
 │   │   └── [username]/
 │   │       └── route.ts        # Public trust badge endpoint
+│   ├── components/
+│   │   └── DealForm.tsx        # Deal creation form with OCR support
+│   ├── test-ocr/
+│   │   └── page.tsx           # OCR testing page
+│   ├── globals.css             # Global styles
 │   ├── layout.tsx              # Root layout
-│   └── page.tsx               # Homepage
+│   └── page.tsx               # Homepage with deal form
 ├── lib/
 │   ├── ai.ts                  # Core AI functions (chatToContract, redFlagCheck, computeReputationScore)
-│   └── ai-api.ts              # API utilities (rate limiting, error handling)
+│   ├── ai-api.ts              # API utilities (rate limiting, error handling)
+│   └── ocr.ts                 # OCR utilities using tesseract.js
 ├── scripts/
 │   ├── stress-chat-to-contract.ts  # AI testing utilities
-│   └── test-badge.ts               # Badge logic testing
+│   ├── test-badge.ts               # Badge logic testing
+│   └── test-ocr-basic.ts          # OCR utility testing
 ├── next.config.js            # Next.js configuration
 └── package.json
 ```
@@ -179,6 +196,68 @@ Generates a public SVG badge showing a user's trust score and deal count.
 - Never errors - always returns a valid SVG for embedding
 - Uses mock data currently - needs Supabase integration
 
+## OCR Integration
+
+The Signature app includes client-side OCR functionality using tesseract.js, allowing users to extract text from chat screenshots instead of manually copying and pasting.
+
+### Features
+
+**Dual Input Modes:**
+- **Text Mode**: Traditional text paste input
+- **Image Mode**: Screenshot upload with OCR extraction
+
+**Multiple Upload Methods:**
+- File selection via click
+- Drag and drop images
+- Clipboard paste (Ctrl+V)
+
+**OCR Processing:**
+- Real-time progress tracking with status updates
+- Confidence scoring (0-100%) 
+- Quality-based warnings for low-confidence extractions
+- Editable preview for user verification
+
+**Quality Thresholds:**
+- **High confidence (80%+)**: Text quality is good
+- **Medium confidence (60-79%)**: Acceptable but double-check numbers
+- **Low confidence (<60%)**: Poor quality, careful review needed
+
+**User Interface:**
+- Progress bar during OCR processing
+- Color-coded confidence indicators
+- Warning banners for low-quality extractions
+- Editable textarea for corrections before submission
+- Image preview with remove option
+
+### Usage Example
+
+1. **Upload Screenshot:**
+   - Click "Upload Screenshot" button
+   - Drag and drop an image, or
+   - Paste an image (Ctrl+V)
+
+2. **OCR Processing:**
+   - System extracts text automatically
+   - Progress bar shows processing status
+   - Confidence score displayed
+
+3. **Review and Edit:**
+   - Check extracted text for accuracy
+   - Correct any OCR errors (especially numbers/prices)
+   - Heed low-confidence warnings
+
+4. **Generate Contract:**
+   - Submit corrected text to AI analysis
+   - Get structured contract summary
+
+### Testing
+
+Visit `/test-ocr` to test OCR functionality with:
+- WhatsApp screenshots (light mode)
+- WhatsApp screenshots (dark mode)
+- Different image qualities
+- Various input methods
+
 ## Implementation Details
 
 ### AI Model
@@ -200,6 +279,16 @@ Generates a public SVG badge showing a user's trust score and deal count.
 - Includes fallback messages for frontend display
 - Never blocks the form - allows manual entry as fallback
 
+### OCR Implementation
+- Client-side processing using tesseract.js (no server costs)
+- Progress tracking with real-time status updates
+- Confidence scoring with quality thresholds
+- Multiple input methods: file upload, drag & drop, clipboard paste
+- Editable preview for user verification before submission
+- Low-confidence warnings with user guidance
+- Optimized for chat screenshots (WhatsApp, etc.)
+- Graceful degradation on OCR failures
+
 ### Badge System
 - SVG template-based generation (no external dependencies)
 - Shields.io-style badge layout
@@ -215,6 +304,7 @@ Generates a public SVG badge showing a user's trust score and deal count.
 - `openai` - OpenAI SDK for Groq API
 - `zod` - Schema validation
 - `typescript` - Type safety
+- `tesseract.js` - Client-side OCR for screenshot text extraction
 
 ## Setup
 
@@ -234,6 +324,12 @@ GROQ_API_KEY=your_groq_api_key_here
 npm run dev
 ```
 
+4. Test the OCR functionality:
+- Visit `http://localhost:3000` for the main deal creation form
+- Visit `http://localhost:3000/test-ocr` for the OCR testing page
+- Upload WhatsApp screenshots (light and dark mode) to test text extraction
+- Try different input methods: file upload, drag & drop, and Ctrl+V paste
+
 ## Current Status
 
 ✅ **Completed Features:**
@@ -247,16 +343,24 @@ npm run dev
 - Color-coded reputation badges
 - Cache headers for performance
 - Graceful error handling for badge endpoint
+- OCR screenshot support with tesseract.js
+- Dual input modes (text paste and image upload)
+- Real-time OCR progress tracking
+- Confidence scoring and quality warnings
+- Editable text preview before submission
+- Multiple upload methods (file, drag & drop, clipboard paste)
 
 🚧 **Future Enhancements:**
 - Supabase integration for badge data fetching
-- Frontend integration
 - User authentication flow
 - Database persistence
 - Additional AI features
 - Unit tests
 - Integration tests
 - Badge customization options
+- Multi-language OCR support
+- Advanced image preprocessing for better OCR accuracy
+- Dark mode WhatsApp screenshot optimization
 
 ## License
 
