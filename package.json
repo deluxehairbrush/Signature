@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "ocr:generate-test-images": "node scripts/create-test-images.js",
     "ocr:test-basic": "node --experimental-strip-types scripts/test-ocr-basic.ts",
     "ocr:test-images": "node --experimental-strip-types scripts/test-ocr-with-images.ts"
@@ -33,9 +34,11 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
+    "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.4.17",
     "canvas": "^3.2.3",
     "postcss": "^8.4.35",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
