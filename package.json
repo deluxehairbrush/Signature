@@ -18,6 +18,7 @@
   "dependencies": {
     "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
+    "canvas": "^3.2.3",
     "next": "^16.3.2",
     "openai": "^7.5.0",
     "react": "^19.2.8",

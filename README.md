@@ -258,6 +258,13 @@ Visit `/test-ocr` to test OCR functionality with:
 - Different image qualities
 - Various input methods
 
+**Actual Test Results:**
+- Light mode WhatsApp: 91% confidence ✅
+- Dark mode WhatsApp: 89% confidence ✅ (better than expected, contrast not an issue)
+- Low quality image: 89% confidence ⚠️ (warning system may need threshold adjustment)
+
+**Note:** Low-quality images are scoring higher confidence than expected, which may prevent warning banners from appearing when users actually need to verify extracted text. Consider adjusting confidence thresholds or creating more challenging test images.
+
 ## Implementation Details
 
 ### AI Model
