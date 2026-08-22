@@ -113,24 +113,36 @@ function createDarkModeChat() {
   console.log('Created dark-mode-chat.png');
 }
 
-// Low quality blurry image
+// Low quality blurry image - genuinely degraded so it exercises the
+// <60% confidence warning path, not just crisp text with light noise.
 function createLowQualityImage() {
-  // Create a simple blurry text image
+  // Render text small onto a low-res canvas...
+  const smallScale = 0.25;
+  const smallCanvas = createCanvas(400 * smallScale, 600 * smallScale);
+  const smallCtx = smallCanvas.getContext('2d');
+
+  smallCtx.fillStyle = '#CCCCCC';
+  smallCtx.fillRect(0, 0, smallCanvas.width, smallCanvas.height);
+
+  smallCtx.fillStyle = '#666666';
+  smallCtx.font = `${12 * smallScale}px Arial`;
+  smallCtx.fillText('Price: $7500 for the project', 50 * smallScale, 100 * smallScale);
+  smallCtx.fillText('Deadline: 3 weeks', 50 * smallScale, 130 * smallScale);
+  smallCtx.fillText('Payment terms: Net 30', 50 * smallScale, 160 * smallScale);
+
+  // ...then upscale it back to full size, which blurs the text (the classic
+  // "downscale-then-upscale" way to fake a genuinely low-quality screenshot.
   ctx.fillStyle = '#CCCCCC';
   ctx.fillRect(0, 0, 400, 600);
-  
-  ctx.fillStyle = '#666666';
-  ctx.font = '12px Arial'; // Smaller font
-  ctx.fillText('Price: $7500 for the project', 50, 100);
-  ctx.fillText('Deadline: 3 weeks', 50, 130);
-  ctx.fillText('Payment terms: Net 30', 50, 160);
-  
-  // Add some noise to simulate poor quality
-  for (let i = 0; i < 1000; i++) {
-    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, 0.1)`;
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(smallCanvas, 0, 0, 400, 600);
+
+  // Heavier, higher-opacity noise on top of the blur.
+  for (let i = 0; i < 4000; i++) {
+    ctx.fillStyle = `rgba(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}, 0.35)`;
     ctx.fillRect(Math.random() * 400, Math.random() * 600, 2, 2);
   }
-  
+
   const buffer = canvas.toBuffer('image/png');
   writeFileSync(path.join(__dirname, '../test-images/low-quality.png'), buffer);
   console.log('Created low-quality.png');
