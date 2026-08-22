@@ -1,11 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { chatToContract } from "../../../../lib/ai";
-import {
-  aiFailureResponse,
-  enforceRateLimit,
-  parseJsonBody,
-} from "../../../../lib/ai-api";
+import { handleAiRequest } from "../../../../lib/ai-api";
 
 export const runtime = "nodejs";
 
@@ -14,23 +10,10 @@ const summarizeBodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const rateLimitResponse = enforceRateLimit(request, "summarize");
-
-  if (rateLimitResponse) {
-    return rateLimitResponse;
-  }
-
-  const body = await parseJsonBody(request, summarizeBodySchema);
-
-  if (body.success === false) {
-    return body.response;
-  }
-
-  try {
-    const deal = await chatToContract(body.data.rawText);
-    return NextResponse.json({ ok: true, deal });
-  } catch (error) {
-    console.error("Failed to summarize chat with AI", error);
-    return aiFailureResponse(error);
-  }
+  return handleAiRequest(request, {
+    schema: summarizeBodySchema,
+    rateLimitAction: "summarize",
+    errorLogMessage: "Failed to summarize chat with AI",
+    handler: async ({ rawText }) => ({ deal: await chatToContract(rawText) }),
+  });
 }

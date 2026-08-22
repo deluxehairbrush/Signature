@@ -55,6 +55,47 @@ export async function parseJsonBody<T>(
   }
 }
 
+/**
+ * Shared shape of an AI route: optional rate limiting, body validation, then
+ * the handler with uniform error logging and failure mapping.
+ */
+export async function handleAiRequest<TBody, TResult extends Record<string, unknown>>(
+  request: NextRequest,
+  {
+    schema,
+    rateLimitAction,
+    errorLogMessage,
+    handler,
+  }: {
+    schema: z.ZodType<TBody>;
+    rateLimitAction?: string;
+    errorLogMessage: string;
+    handler: (body: TBody) => Promise<TResult>;
+  },
+): Promise<NextResponse> {
+  if (rateLimitAction) {
+    const rateLimitResponse = enforceRateLimit(request, rateLimitAction);
+
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+  }
+
+  const body = await parseJsonBody(request, schema);
+
+  if (body.success === false) {
+    return body.response;
+  }
+
+  try {
+    const result = await handler(body.data);
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    console.error(errorLogMessage, error);
+    return aiFailureResponse(error);
+  }
+}
+
 export function enforceRateLimit(request: NextRequest, action: string) {
   const key = `${action}:${getRequesterId(request)}`;
   const now = Date.now();
