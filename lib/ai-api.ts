@@ -5,6 +5,7 @@ const FALLBACK_MESSAGE =
   "Couldn't auto-generate the summary, you can fill it in manually";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 10;
+const MAX_BODY_BYTES = 64_000;
 
 type RateLimitBucket = {
   count: number;
@@ -34,7 +35,16 @@ export async function parseJsonBody<T>(
   schema: z.ZodType<T>,
 ): Promise<{ success: true; data: T } | { success: false; response: NextResponse }> {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+      return {
+        success: false,
+        response: jsonError(413, "Request body is too large."),
+      };
+    }
+
+    const body = JSON.parse(rawBody);
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
@@ -58,6 +68,7 @@ export async function parseJsonBody<T>(
 export function enforceRateLimit(request: NextRequest, action: string) {
   const key = `${action}:${getRequesterId(request)}`;
   const now = Date.now();
+  pruneExpiredBuckets(now);
   const bucket = rateLimitBuckets.get(key);
 
   if (!bucket || bucket.resetAt <= now) {
@@ -107,40 +118,22 @@ export function aiFailureResponse(error: unknown) {
   return jsonError(502, "AI summary generation failed.");
 }
 
+// Rate limiting must key on values the client cannot freely choose. A JWT is
+// only trustworthy after signature verification, so identity-based keys belong
+// behind real auth middleware, not here.
 function getRequesterId(request: NextRequest): string {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
-  const supabaseUserId = token ? getJwtSubject(token) : null;
-
-  if (supabaseUserId) {
-    return `user:${supabaseUserId}`;
-  }
-
   const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const realIp = request.headers.get("x-real-ip");
 
   return `ip:${forwardedFor || realIp || "unknown"}`;
 }
 
-function getJwtSubject(token: string): string | null {
-  try {
-    const [, payload] = token.split(".");
-
-    if (!payload) {
-      return null;
+function pruneExpiredBuckets(now: number): void {
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (bucket.resetAt <= now) {
+      rateLimitBuckets.delete(key);
     }
-
-    const decoded = JSON.parse(base64UrlDecode(payload)) as { sub?: unknown };
-    return typeof decoded.sub === "string" && decoded.sub ? decoded.sub : null;
-  } catch {
-    return null;
   }
-}
-
-function base64UrlDecode(value: string): string {
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-  return Buffer.from(padded, "base64").toString("utf8");
 }
 
 function getErrorStatus(error: unknown): number | undefined {
