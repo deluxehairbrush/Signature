@@ -10,7 +10,10 @@ import {
 export const runtime = "nodejs";
 
 const summarizeBodySchema = z.object({
-  rawText: z.string().min(1, "rawText is required."),
+  rawText: z
+    .string()
+    .min(1, "rawText is required.")
+    .max(20_000, "rawText must be 20,000 characters or fewer."),
 });
 
 export async function POST(request: NextRequest) {

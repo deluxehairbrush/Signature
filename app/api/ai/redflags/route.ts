@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { dealSummarySchema, redFlagCheck } from "../../../../lib/ai";
-import { aiFailureResponse, parseJsonBody } from "../../../../lib/ai-api";
+import {
+  aiFailureResponse,
+  enforceRateLimit,
+  parseJsonBody,
+} from "../../../../lib/ai-api";
 
 export const runtime = "nodejs";
 
@@ -10,6 +14,12 @@ const redFlagsBodySchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const rateLimitResponse = enforceRateLimit(request, "redflags");
+
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   const body = await parseJsonBody(request, redFlagsBodySchema);
 
   if (body.success === false) {

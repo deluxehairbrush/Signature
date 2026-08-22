@@ -5,6 +5,7 @@ const FALLBACK_MESSAGE =
   "Couldn't auto-generate the summary, you can fill it in manually";
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 10;
+const MAX_BODY_BYTES = 64_000;
 
 type RateLimitBucket = {
   count: number;
@@ -34,7 +35,16 @@ export async function parseJsonBody<T>(
   schema: z.ZodType<T>,
 ): Promise<{ success: true; data: T } | { success: false; response: NextResponse }> {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+      return {
+        success: false,
+        response: jsonError(413, "Request body is too large."),
+      };
+    }
+
+    const body = JSON.parse(rawBody);
     const parsed = schema.safeParse(body);
 
     if (!parsed.success) {
