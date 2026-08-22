@@ -72,7 +72,7 @@ describe("computeReputationScore", () => {
     expect(result.score).toBe(expected);
   });
 
-  it("clamps out-of-range and non-finite ratings", () => {
+  it("clamps out-of-range ratings and excludes unrated deals from the average", () => {
     const deals: Deal[] = [
       { status: "completed", wasPaidOnTime: true, rating: 99 },
       { status: "completed", wasPaidOnTime: false, rating: -3 },
@@ -80,9 +80,37 @@ describe("computeReputationScore", () => {
     ];
     const result = computeReputationScore(deals);
 
-    // 99 -> 5, -3 -> 1, NaN -> 1 => avg (5 + 1 + 1) / 3
-    expect(result.avgRating).toBe(2.33);
+    // 99 clamps to 5; -3 and NaN are unrated and excluded from the average
+    expect(result.avgRating).toBe(5);
     expect(result.onTimePaymentRate).toBe(0.67);
+    expect(result.dealCount).toBe(3);
+  });
+
+  it("only counts completed deals", () => {
+    const deals: Deal[] = [
+      { status: "completed", wasPaidOnTime: true, rating: 5 },
+      { status: "pending", wasPaidOnTime: false, rating: 1 },
+      { status: "cancelled", wasPaidOnTime: false, rating: 1 },
+    ];
+    const result = computeReputationScore(deals);
+
+    expect(result.dealCount).toBe(1);
+    expect(result.avgRating).toBe(5);
+    expect(result.onTimePaymentRate).toBe(1);
+  });
+
+  it("scores entirely unrated histories on payment and volume only", () => {
+    const deals: Deal[] = [
+      { status: "completed", wasPaidOnTime: true, rating: 0 },
+      { status: "completed", wasPaidOnTime: true, rating: 0 },
+    ];
+    const result = computeReputationScore(deals);
+
+    expect(result.avgRating).toBe(0);
+    const expected = Math.round(
+      (0.3 + (Math.log1p(2) / Math.log1p(20)) * 0.2) * 100,
+    );
+    expect(result.score).toBe(expected);
   });
 
   it("caps the deal count contribution for large histories", () => {
@@ -205,9 +233,9 @@ describe("chatToContract", () => {
     const result = await chatToContract("chat text");
 
     expect(result.price).toBe(15000);
-    expect(result.missingFields).toEqual(
-      expect.arrayContaining(["deadline", "revisions"]),
-    );
+    // Every required field has a value, so the model's stale comma-separated
+    // missingFields claim is discarded after normalization.
+    expect(result.missingFields).toEqual([]);
   });
 
   it("extracts JSON wrapped in surrounding prose", async () => {

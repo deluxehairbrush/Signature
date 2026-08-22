@@ -140,7 +140,7 @@ describe("enforceRateLimit", () => {
     expect(enforceRateLimit(second, "per-ip")).toBeNull();
   });
 
-  it("identifies requesters by JWT subject when a bearer token is present", () => {
+  it("ignores unverified bearer tokens and keys buckets on IP only", () => {
     const token = makeJwt({ sub: "user-abc" });
     const authed = makeRequest({
       headers: {
@@ -156,11 +156,12 @@ describe("enforceRateLimit", () => {
       expect(enforceRateLimit(authed, "per-user")).toBeNull();
     }
 
+    // A JWT sub must not mint a separate bucket: same IP shares the limit.
     expect(enforceRateLimit(authed, "per-user")).not.toBeNull();
-    expect(enforceRateLimit(sameIpAnonymous, "per-user")).toBeNull();
+    expect(enforceRateLimit(sameIpAnonymous, "per-user")).not.toBeNull();
   });
 
-  it("falls back to the IP bucket for malformed bearer tokens", () => {
+  it("shares the IP bucket for malformed bearer tokens", () => {
     const malformed = makeRequest({
       headers: {
         authorization: "Bearer not-a-jwt",

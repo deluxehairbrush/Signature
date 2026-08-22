@@ -1,11 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { recognizeMock } = vi.hoisted(() => ({
-  recognizeMock: vi.fn(),
-}));
+const { recognizeMock, createWorkerMock, loggerRef } = vi.hoisted(() => {
+  const state: {
+    recognizeMock: ReturnType<typeof vi.fn>;
+    createWorkerMock: ReturnType<typeof vi.fn>;
+    loggerRef: { current: ((message: unknown) => void) | null };
+  } = {
+    recognizeMock: vi.fn(),
+    createWorkerMock: vi.fn(),
+    loggerRef: { current: null },
+  };
+
+  state.createWorkerMock.mockImplementation(
+    async (_lang: string, _oem: unknown, options: { logger: (message: unknown) => void }) => {
+      state.loggerRef.current = options.logger;
+      return { recognize: state.recognizeMock };
+    },
+  );
+
+  return state;
+});
 
 vi.mock("tesseract.js", () => ({
-  default: { recognize: recognizeMock },
+  default: { createWorker: createWorkerMock },
 }));
 
 import {
@@ -54,7 +71,7 @@ describe("getConfidenceMessage", () => {
 });
 
 describe("extractTextFromImage", () => {
-  it("returns trimmed text and confidence from Tesseract", async () => {
+  it("returns trimmed text and confidence for a browser File via an object URL", async () => {
     recognizeMock.mockResolvedValueOnce({
       data: { text: "  Extracted contract text  \n", confidence: 87 },
     });
@@ -65,19 +82,38 @@ describe("extractTextFromImage", () => {
       text: "Extracted contract text",
       confidence: 87,
     });
-    expect(recognizeMock).toHaveBeenCalledTimes(1);
     expect(recognizeMock).toHaveBeenCalledWith(
       expect.stringContaining("blob:"),
-      "eng",
-      expect.objectContaining({ logger: expect.any(Function) }),
     );
   });
 
+  it("passes non-Blob input (e.g. a file path) straight to the worker", async () => {
+    recognizeMock.mockResolvedValueOnce({
+      data: { text: "headless text", confidence: 91 },
+    });
+
+    const result = await extractTextFromImage("/tmp/screenshot.png");
+
+    expect(result.text).toBe("headless text");
+    expect(recognizeMock).toHaveBeenCalledWith("/tmp/screenshot.png");
+  });
+
+  it("reuses a single Tesseract worker across calls", async () => {
+    recognizeMock.mockResolvedValue({
+      data: { text: "one", confidence: 90 },
+    });
+
+    await extractTextFromImage(makeFile());
+    await extractTextFromImage(makeFile());
+
+    expect(createWorkerMock).toHaveBeenCalledTimes(1);
+  });
+
   it("forwards recognition progress as a percentage", async () => {
-    recognizeMock.mockImplementationOnce(async (_image, _lang, options) => {
-      options.logger({ status: "loading tesseract core", progress: 0.5 });
-      options.logger({ status: "recognizing text", progress: 0.25 });
-      options.logger({ status: "recognizing text", progress: 1 });
+    recognizeMock.mockImplementationOnce(async () => {
+      loggerRef.current?.({ status: "loading tesseract core", progress: 0.5 });
+      loggerRef.current?.({ status: "recognizing text", progress: 0.25 });
+      loggerRef.current?.({ status: "recognizing text", progress: 1 });
       return { data: { text: "done", confidence: 90 } };
     });
 
@@ -89,6 +125,18 @@ describe("extractTextFromImage", () => {
       { status: "recognizing text", progress: 25 },
       { status: "recognizing text", progress: 100 },
     ]);
+  });
+
+  it("does not report progress after a call without a callback", async () => {
+    recognizeMock.mockImplementationOnce(async () => {
+      loggerRef.current?.({ status: "recognizing text", progress: 0.5 });
+      return { data: { text: "quiet", confidence: 90 } };
+    });
+
+    const updates: unknown[] = [];
+    await extractTextFromImage(makeFile());
+
+    expect(updates).toEqual([]);
   });
 
   it("wraps Tesseract failures in a user-friendly error", async () => {
