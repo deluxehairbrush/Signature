@@ -169,7 +169,6 @@ elif page.startswith("2"):
                 currency = st.selectbox("Currency", ["USD", "INR", "EUR", "GBP"])
                 avail = st.selectbox("Availability", ["AVAILABLE", "BUSY", "UNAVAILABLE"])
                 hours = st.text_input("Working Hours", "Mon-Fri 9AM-5PM PST")
-                tags = st.text_input("Tags (comma-separated)", "Python, Django, React")
                 if st.form_submit_button("Save Profile"):
                     payload = {
                         "display_name": display_name,
@@ -181,15 +180,28 @@ elif page.startswith("2"):
                         "availability_status": avail,
                         "working_hours": hours,
                     }
-                    # Try PATCH first (update), fall back to POST (create)
-                    r = api("patch", "/freelancers/profile/", payload)
-                    if r and not r.ok:
+                    # GET current profile to find pk for PATCH
+                    me = api("get", "/freelancers/profile/")
+                    pk = None
+                    if me and me.ok:
+                        me_data = me.json()
+                        # DRF list view returns a list or paginated results
+                        results = me_data.get("results", me_data) if isinstance(me_data, dict) else me_data
+                        if isinstance(results, list) and results:
+                            pk = results[0].get("id")
+
+                    if pk:
+                        r = api("patch", f"/freelancers/profile/{pk}/", payload)
+                    else:
+                        # No existing profile — create one
                         r = api("post", "/freelancers/profile/", payload)
+
                     if r and r.ok:
                         st.success("Profile saved!")
                         show_json(r.json())
                     elif r:
                         st.error(r.text)
+
     elif ut == "CLIENT":
         with st.expander("Create / Update Client Profile"):
             with st.form("cl_profile"):
@@ -206,9 +218,20 @@ elif page.startswith("2"):
                         "location": loc,
                         "industry": industry,
                     }
-                    r = api("patch", "/clients/profile/", payload)
-                    if r and not r.ok:
+                    # GET current profile to find pk for PATCH
+                    me = api("get", "/clients/profile/")
+                    pk = None
+                    if me and me.ok:
+                        me_data = me.json()
+                        results = me_data.get("results", me_data) if isinstance(me_data, dict) else me_data
+                        if isinstance(results, list) and results:
+                            pk = results[0].get("id")
+
+                    if pk:
+                        r = api("patch", f"/clients/profile/{pk}/", payload)
+                    else:
                         r = api("post", "/clients/profile/", payload)
+
                     if r and r.ok:
                         st.success("Profile saved!")
                         show_json(r.json())
@@ -279,18 +302,32 @@ elif page.startswith("4"):
         horizontal=True,
     )
 
-    # Extra fields for propose
-    extra = {}
     if action == "propose":
-        fl_user = st.text_input("Freelancer username to propose to")
-        if fl_user:
-            extra["freelancer_username"] = fl_user
+        st.info(
+            "The backend `propose` action requires `deal.freelancer` to already be set. "
+            "If your deal has no freelancer yet, enter one below to PATCH it first."
+        )
+        fl_user = st.text_input(
+            "Freelancer username (set before proposing)",
+            key="propose_fl_username",
+        )
+    else:
+        fl_user = ""
 
     if st.button(f"POST /deals/{{id}}/{action}/"):
         if not deal_id.strip():
             st.warning("Enter a deal ID first.")
         else:
-            r = api("post", f"/deals/{deal_id.strip()}/{action}/", extra or None)
+            did = deal_id.strip()
+            # For propose, set the freelancer first if one was provided
+            if action == "propose" and fl_user:
+                patch_r = api("patch", f"/deals/{did}/", {"freelancer_username": fl_user})
+                if patch_r and not patch_r.ok:
+                    st.error(f"Failed to set freelancer: {patch_r.text}")
+                elif patch_r:
+                    st.success(f"Set freelancer to {fl_user}")
+
+            r = api("post", f"/deals/{did}/{action}/")
             if r:
                 show_json(r.json() if r.headers.get("content-type", "").startswith("application/json") else {"status": r.status_code, "text": r.text})
 
