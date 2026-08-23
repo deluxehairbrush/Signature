@@ -1,8 +1,9 @@
-"""Test-only settings override — uses SQLite so the test suite can run
-without a live PostgreSQL instance.  This file is NOT used in production
-or development; only by the test runner."""
+"""Test-only settings — self-contained, no live PostgreSQL or HTTPS required."""
 from config.settings import *  # noqa: F401,F403
 
+DEBUG = True
+
+# Use SQLite so the test suite runs without PostgreSQL
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
@@ -10,5 +11,9 @@ DATABASES = {
     }
 }
 
-# token_blacklist needs its own tables; SQLite handles fine
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# Disable production security guards that break test requests
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_HSTS_SECONDS = 0
+SECURE_PROXY_SSL_HEADER = None
