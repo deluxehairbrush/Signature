@@ -2,7 +2,7 @@ import pytest
 from rest_framework import status
 
 from apps.deals.models import Deal
-from apps.tags.models import Tag
+from apps.deals.services import InvalidTransition, validate_transition
 
 
 @pytest.mark.django_db
@@ -29,17 +29,16 @@ class TestDealCRUD:
             title="Private Deal", status="DRAFT",
         )
         api_client.force_authenticate(user=freelancer_user)
-        # This is fine — freelancer is a participant
         response = api_client.get(f"/api/v1/deals/{deal.id}/")
         assert response.status_code == status.HTTP_200_OK
 
-        # Create another user
+        # Non-participant gets 404 (queryset excludes the deal)
         from django.contrib.auth import get_user_model
         User = get_user_model()
         other = User.objects.create_user(email="other@test.com", username="other", password="pass1234")
         api_client.force_authenticate(user=other)
         response = api_client.get(f"/api/v1/deals/{deal.id}/")
-        assert response.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 @pytest.mark.django_db
@@ -50,18 +49,28 @@ class TestDealStateMachine:
             title="Test Deal", status=status_val,
         )
 
-    def test_draft_to_proposed(self, auth_client_c, client_user, freelancer_user):
+    def test_propose_via_action(self, auth_client_c, client_user, freelancer_user):
+        """DRAFT → PROPOSED via the propose action (client only, requires freelancer)."""
         deal = self._create_deal(client_user, freelancer_user, "DRAFT")
-        # Update status to PROPOSED via PATCH
-        response = auth_client_c.patch(f"/api/v1/deals/{deal.id}/", {"status": "PROPOSED"}, format="json")
-        # This tests through serializer
-        if response.status_code == 200:
-            deal.refresh_from_db()
-            assert deal.status == "PROPOSED"
+        response = auth_client_c.post(f"/api/v1/deals/{deal.id}/propose/", format="json")
+        assert response.status_code == status.HTTP_200_OK
+        deal.refresh_from_db()
+        assert deal.status == "PROPOSED"
+
+    def test_propose_requires_freelancer(self, auth_client_c, client_user):
+        """Cannot propose a deal without a freelancer assigned."""
+        deal = self._create_deal(client_user, None, "DRAFT")
+        response = auth_client_c.post(f"/api/v1/deals/{deal.id}/propose/", format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_non_owner_cannot_propose(self, auth_client_f, client_user, freelancer_user):
+        """Only the deal owner (client) can propose."""
+        deal = self._create_deal(client_user, freelancer_user, "DRAFT")
+        response = auth_client_f.post(f"/api/v1/deals/{deal.id}/propose/", format="json")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_invalid_transition(self, client_user, freelancer_user):
         deal = self._create_deal(client_user, freelancer_user, "COMPLETED")
-        from apps.deals.services import InvalidTransition, validate_transition
         with pytest.raises(InvalidTransition):
             validate_transition("COMPLETED", "DRAFT")
 
@@ -103,7 +112,8 @@ class TestCompletionConfirmation:
         )
         assert response.status_code == status.HTTP_201_CREATED
 
-    def test_non_participant_cannot_submit(self, api_client, client_user, freelancer_user):
+    def test_non_participant_gets_404(self, api_client, client_user, freelancer_user):
+        """Non-participant can't see the deal — gets 404 from queryset filtering."""
         from django.contrib.auth import get_user_model
         User = get_user_model()
         other = User.objects.create_user(email="other@test.com", username="other", password="pass1234")
@@ -118,4 +128,18 @@ class TestCompletionConfirmation:
             {"completed_on_time": True, "compensation_fair": True},
             format="json",
         )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        # Queryset filtering prevents access — 404, not 403
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_cannot_submit_for_non_completed_deal(self, auth_client_c, client_user, freelancer_user):
+        """Confirmations only accepted for completed deals."""
+        deal = Deal.objects.create(
+            client=client_user, freelancer=freelancer_user,
+            title="Test Deal", status="ACTIVE",
+        )
+        response = auth_client_c.post(
+            f"/api/v1/deals/{deal.id}/completion/",
+            {"completed_on_time": True, "compensation_fair": True},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST

@@ -68,12 +68,16 @@ def client_profile(client_user):
 
 
 @pytest.fixture
-def auth_client_f(api_client, freelancer_user):
-    api_client.force_authenticate(user=freelancer_user)
-    return api_client
+def auth_client_f(freelancer_user):
+    """Authenticated as freelancer — owns its own APIClient instance."""
+    client = APIClient()
+    client.force_authenticate(user=freelancer_user)
+    return client
 
 
 @pytest.fixture
-def auth_client_c(api_client, client_user):
-    api_client.force_authenticate(user=client_user)
-    return api_client
+def auth_client_c(client_user):
+    """Authenticated as client — owns its own APIClient instance."""
+    client = APIClient()
+    client.force_authenticate(user=client_user)
+    return client

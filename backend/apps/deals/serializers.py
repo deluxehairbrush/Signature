@@ -70,10 +70,8 @@ class DealCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         tags = validated_data.pop("tags", [])
-        deal = Deal.objects.create(
-            client=self.context["request"].user,
-            **validated_data,
-        )
+        # client is injected by DealViewSet.perform_create via save(client=...)
+        deal = Deal.objects.create(**validated_data)
         deal.tags.set(tags)
         return deal
 

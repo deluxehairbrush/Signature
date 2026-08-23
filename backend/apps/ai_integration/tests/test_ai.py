@@ -66,7 +66,7 @@ class TestAIService:
         mock_post.return_value = mock_response
 
         result = detect_red_flags({"scope": "Build website", "confidence": "low"})
-        assert result["has_red_flags"] is True
+        assert result["hasRedFlags"] is True
         assert len(result["flags"]) == 1
 
 
