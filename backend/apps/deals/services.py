@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
 
 from django.db import transaction
 from django.utils import timezone as dj_timezone
@@ -55,8 +54,34 @@ def transition_deal(deal, target_status: str):
     return deal
 
 
-def create_deal_snapshot(deal):
-    """Create an immutable snapshot of the deal's current terms."""
+def _compute_proof_hash(deal) -> str:
+    """Compute a deterministic SHA-256 proof hash from immutable deal terms only.
+
+    No timestamp is included — the same deal data always produces the same hash.
+    """
+    canonical = json.dumps(
+        {
+            "deal_id": str(deal.public_id),
+            "client": deal.client.username,
+            "freelancer": deal.freelancer.username if deal.freelancer else "",
+            "compensation": str(deal.compensation_amount),
+            "currency": deal.currency,
+            "scope": deal.scope,
+            "deliverables": deal.deliverables,
+            "deadline": deal.deadline.isoformat() if deal.deadline else "",
+            "working_hours": deal.working_hours,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def create_deal_snapshot(deal) -> DealSnapshot:
+    """Create an immutable snapshot of the deal's current terms and compute
+    the proof hash once.  The hash is stored on the snapshot so it never
+    changes — every subsequent GET /proof/ returns the same value.
+    """
     from apps.profiles.models import FreelancerProfile
 
     freelancer_name = ""
@@ -71,6 +96,8 @@ def create_deal_snapshot(deal):
     client_name = deal.client.full_name or deal.client.username
     client_username = deal.client.username
     tag_names = list(deal.tags.values_list("name", flat=True))
+
+    proof_hash = _compute_proof_hash(deal)
 
     snapshot, _ = DealSnapshot.objects.get_or_create(
         deal=deal,
@@ -88,26 +115,13 @@ def create_deal_snapshot(deal):
             "agreed_tags_snapshot": tag_names,
         },
     )
+
+    # Store the proof hash on the snapshot so it is stable forever
+    if not snapshot.proof_hash:
+        snapshot.proof_hash = proof_hash
+        snapshot.save(update_fields=["proof_hash"])
+
     return snapshot
-
-
-def generate_proof_hash(deal) -> str:
-    """Generate SHA-256 proof hash of the finalized deal contents."""
-    canonical = json.dumps(
-        {
-            "deal_id": str(deal.public_id),
-            "client": deal.client.username,
-            "freelancer": deal.freelancer.username if deal.freelancer else "",
-            "compensation": str(deal.compensation_amount),
-            "scope": deal.scope,
-            "deliverables": deal.deliverables,
-            "deadline": deal.deadline.isoformat() if deal.deadline else "",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def build_proof_response(deal):
@@ -118,7 +132,10 @@ def build_proof_response(deal):
     sig_map = {s.signer_role: s for s in signatures}
     completions = deal.completions.all()
 
-    proof_hash = generate_proof_hash(deal)
+    # Prefer the stored snapshot hash; fall back to computing (for deals
+    # created before snapshots existed — shouldn't happen in practice).
+    snapshot = getattr(deal, "snapshot", None)
+    proof_hash = snapshot.proof_hash if snapshot and snapshot.proof_hash else _compute_proof_hash(deal)
 
     return {
         "proof_id": str(deal.public_id),

@@ -71,12 +71,15 @@ def sign_deal(deal: Deal, user, request=None):
             user_agent=user_agent,
         )
 
-        # Check if both parties have signed
-        both_signed = DealSignature.objects.filter(
-            deal=deal, status="VALID"
-        ).count() >= 2
+        # Check if one signature exists for each role
+        has_client_sig = DealSignature.objects.filter(
+            deal=deal, signer_role="CLIENT", status="VALID"
+        ).exists()
+        has_freelancer_sig = DealSignature.objects.filter(
+            deal=deal, signer_role="FREELANCER", status="VALID"
+        ).exists()
 
-        if both_signed and deal.status == "ACCEPTED":
+        if has_client_sig and has_freelancer_sig and deal.status == "ACCEPTED":
             create_deal_snapshot(deal)
             transition_deal(deal, "ACTIVE")
 

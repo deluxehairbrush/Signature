@@ -2,7 +2,6 @@ import json
 
 from django.contrib.auth import get_user_model
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404
 from rest_framework import permissions
 from rest_framework.views import APIView
 
@@ -41,23 +40,33 @@ def _generate_svg(label: str, score_text: str, deal_count: int, color: str) -> s
 </svg>'''
 
 
+def _get_or_default_rep(username):
+    """Return (user, reputation) or (None, None) if user not found.
+    Uses filter().first() to avoid creating rows on unauthenticated reads.
+    """
+    user = User.objects.filter(username=username).first()
+    if user is None:
+        return None, None
+    rep = UserReputation.objects.filter(user=user).first()
+    return user, rep
+
+
 class BadgeView(APIView):
     """GET /api/v1/badges/{username}/"""
 
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, username):
-        user = get_object_or_404(User, username=username)
-        rep, _ = UserReputation.objects.get_or_create(user=user)
-
-        if rep.completed_deals == 0:
-            score_text = "no data"
-            color = "#9CA3AF"
+        user, rep = _get_or_default_rep(username)
+        if user is None:
+            # Return a "no data" badge even for unknown usernames
+            svg = _generate_svg("TrustGig", "no data", 0, "#9CA3AF")
+        elif rep is None or rep.completed_deals == 0:
+            svg = _generate_svg("TrustGig", "no data", 0, "#9CA3AF")
         else:
             score_text = f"{rep.score}/100"
             color = _get_badge_color(rep.score, rep.completed_deals)
-
-        svg = _generate_svg("TrustGig", score_text, rep.completed_deals, color)
+            svg = _generate_svg("TrustGig", score_text, rep.completed_deals, color)
 
         return HttpResponse(svg, content_type="image/svg+xml", headers={
             "Cache-Control": "public, max-age=300, s-maxage=600",
@@ -71,17 +80,16 @@ class BadgeJSONView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, username):
-        user = get_object_or_404(User, username=username)
-        rep, _ = UserReputation.objects.get_or_create(user=user)
+        user, rep = _get_or_default_rep(username)
 
-        data = json.dumps({
+        data = {
             "success": True,
             "username": username,
-            "score": rep.score,
-            "completed_deals": rep.completed_deals,
-            "on_time_completions": rep.on_time_completions,
-            "fair_compensation_count": rep.fair_compensation_count,
-            "color": _get_badge_color(rep.score, rep.completed_deals),
-        })
+            "score": rep.score if rep else 0,
+            "completed_deals": rep.completed_deals if rep else 0,
+            "on_time_completions": rep.on_time_completions if rep else 0,
+            "fair_compensation_count": rep.fair_compensation_count if rep else 0,
+            "color": _get_badge_color(rep.score, rep.completed_deals) if rep else "#9CA3AF",
+        }
 
-        return HttpResponse(data, content_type="application/json")
+        return HttpResponse(json.dumps(data), content_type="application/json")

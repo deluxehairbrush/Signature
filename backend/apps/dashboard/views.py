@@ -1,4 +1,3 @@
-from django.db.models import Q
 from rest_framework import permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -6,6 +5,7 @@ from rest_framework.views import APIView
 from apps.deals.models import Deal
 from apps.profiles.models import ClientProfile, FreelancerProfile
 from apps.profiles.serializers import ClientProfileSerializer, FreelancerProfileSerializer
+from apps.profiles.services import calculate_profile_completion
 from apps.reputation.models import UserReputation
 
 
@@ -16,16 +16,11 @@ class FreelancerDashboardView(APIView):
 
     def get(self, request):
         user = request.user
-        try:
-            profile = FreelancerProfile.objects.get(user=user)
+        profile = FreelancerProfile.objects.filter(user=user).first()
+        if profile:
             profile_data = FreelancerProfileSerializer(profile).data
-            completion = {
-                "completion_percentage": 0,
-                "missing_fields": ["profile"],
-            }
-            from apps.profiles.services import calculate_profile_completion
             completion = calculate_profile_completion(profile)
-        except FreelancerProfile.DoesNotExist:
+        else:
             profile_data = None
             completion = {"completion_percentage": 0, "missing_fields": ["profile"]}
 

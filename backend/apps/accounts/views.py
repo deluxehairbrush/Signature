@@ -3,6 +3,9 @@ from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import (
+    TokenRefreshView as SimpleJWTTokenRefreshView,
+)
 
 from .serializers import (
     ChangePasswordSerializer,
@@ -68,50 +71,41 @@ class LoginView(APIView):
         return Response({"success": True, "user": UserSerializer(user).data, "tokens": tokens})
 
 
-class TokenRefreshView(APIView):
-    """POST /api/v1/auth/token/refresh/"""
+class TokenRefreshView(SimpleJWTTokenRefreshView):
+    """POST /api/v1/auth/token/refresh/
 
+    Delegates to simplejwt's built-in refresh view, which handles
+    token rotation and blacklist logic correctly.
+    """
     permission_classes = [permissions.AllowAny]
+    throttle_scope = "auth"
+
+
+class LogoutView(APIView):
+    """POST /api/v1/auth/logout/
+
+    Blacklists the supplied refresh token so it can no longer be used.
+    """
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         refresh_token = request.data.get("refresh")
         if not refresh_token:
             return Response(
                 {"success": False, "error": {"code": "MISSING_REFRESH_TOKEN",
-                    "message": "Refresh token is required."}},
+                    "message": "Refresh token is required for logout."}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
             token = RefreshToken(refresh_token)
-            return Response(
-                {
-                    "success": True,
-                    "access": str(token.access_token),
-                    "refresh": str(token),
-                }
-            )
-        except Exception:
+            token.blacklist()
+        except Exception as e:
             return Response(
                 {"success": False, "error": {"code": "INVALID_REFRESH_TOKEN",
-                    "message": "Invalid or expired refresh token."}},
-                status=status.HTTP_401_UNAUTHORIZED,
+                    "message": "Invalid or already blacklisted refresh token."}},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-
-
-class LogoutView(APIView):
-    """POST /api/v1/auth/logout/"""
-
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        refresh_token = request.data.get("refresh")
-        if refresh_token:
-            try:
-                token = RefreshToken(refresh_token)
-                token.blacklist()
-            except Exception:
-                pass
-        return Response({"success": True, "message": "Logged out."})
+        return Response({"success": True, "message": "Logged out successfully."})
 
 
 class MeView(APIView):

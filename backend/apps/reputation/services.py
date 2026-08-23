@@ -1,9 +1,8 @@
 """Reputation calculation service — deterministic, backend-only."""
 
-import math
-
 from django.db import transaction
 
+from apps.profiles.models import FreelancerProfile
 from apps.reputation.models import ReputationRecord, UserReputation
 
 
@@ -83,14 +82,18 @@ def _rebuild_from_records(rep: UserReputation):
 
 def _sync_profile(user, rep: UserReputation):
     """Sync reputation data to the freelancer profile."""
+    import logging
+    logger = logging.getLogger(__name__)
     try:
         fp = user.freelancer_profile
         fp.reputation_score = rep.score
         fp.completed_deals = rep.completed_deals
         fp.successful_deals = rep.completed_deals - rep.disputes
         fp.save(update_fields=["reputation_score", "completed_deals", "successful_deals", "updated_at"])
+    except FreelancerProfile.DoesNotExist:
+        pass  # User is not a freelancer — nothing to sync
     except Exception:
-        pass  # Not a freelancer or profile doesn't exist
+        logger.warning("Failed to sync reputation to profile for user %s", user.pk, exc_info=True)
 
 
 def _get_user_score(user):
@@ -116,12 +119,21 @@ def record_event(user, deal, event_type: str, score_delta: int, metadata: dict =
 
 
 def process_deal_completion(deal):
-    """Process all reputation events when a deal is marked COMPLETED."""
+    """Process all reputation events when a deal is marked COMPLETED.
+
+    Idempotent: skips if a DEAL_COMPLETED record already exists for this deal+user.
+    """
     completions = deal.completions.all()
     both_confirmed = completions.count() >= 2
 
     for user in [deal.client, deal.freelancer]:
         if user is None:
+            continue
+
+        # Idempotency guard — don't double-count
+        if ReputationRecord.objects.filter(
+            user=user, deal=deal, event_type=ReputationRecord.EventType.DEAL_COMPLETED
+        ).exists():
             continue
 
         # Deal completed
@@ -142,14 +154,24 @@ def process_deal_completion(deal):
 
 
 def process_deal_cancellation(deal):
-    """Process reputation events when a deal is cancelled."""
+    """Process reputation events when a deal is cancelled.
+
+    Idempotent: skips if a DEAL_CANCELLED record already exists for this deal+user.
+    """
     for user in [deal.client, deal.freelancer]:
-        if user:
+        if user and not ReputationRecord.objects.filter(
+            user=user, deal=deal, event_type=ReputationRecord.EventType.DEAL_CANCELLED
+        ).exists():
             record_event(user, deal, ReputationRecord.EventType.DEAL_CANCELLED, POINTS_CANCELLED)
 
 
 def process_deal_dispute(deal):
-    """Process reputation events when a deal is disputed."""
+    """Process reputation events when a deal is disputed.
+
+    Idempotent: skips if a DISPUTE_RAISED record already exists for this deal+user.
+    """
     for user in [deal.client, deal.freelancer]:
-        if user:
+        if user and not ReputationRecord.objects.filter(
+            user=user, deal=deal, event_type=ReputationRecord.EventType.DISPUTE_RAISED
+        ).exists():
             record_event(user, deal, ReputationRecord.EventType.DISPUTE_RAISED, POINTS_DISPUTE)

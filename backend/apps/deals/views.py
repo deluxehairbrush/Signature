@@ -1,10 +1,14 @@
 from django.db import models as db_models
-from django.shortcuts import get_object_or_404
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from apps.reputation.services import recalculate_reputation
+from apps.reputation.services import (
+    process_deal_cancellation,
+    process_deal_completion,
+    process_deal_dispute,
+    recalculate_reputation,
+)
 
 from .models import CompletionConfirmation, Deal
 from .serializers import (
@@ -50,13 +54,43 @@ class DealViewSet(viewsets.ModelViewSet):
 
     # ---- State transition actions ----
 
+    @action(detail=True, methods=["post"], url_path="propose")
+    def propose(self, request, pk=None):
+        """POST /api/v1/deals/{id}/propose/
+
+        Move a DRAFT deal to PROPOSED.  Only the client (deal owner) may
+        propose, and a freelancer must be assigned.
+        """
+        deal = self.get_object()
+        if deal.client != request.user:
+            return Response(
+                {"success": False, "error": {"code": "NOT_OWNER", "message": "Only the deal owner can propose a deal."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not deal.freelancer:
+            return Response(
+                {"success": False, "error": {"code": "NO_FREELANCER", "message": "A freelancer must be assigned before proposing."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            transition_deal(deal, "PROPOSED")
+        except InvalidTransition as e:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"success": True, "deal": DealDetailSerializer(deal).data})
+
     @action(detail=True, methods=["post"], url_path="accept")
     def accept(self, request, pk=None):
-        """POST /api/v1/deals/{id}/accept/"""
+        """POST /api/v1/deals/{id}/accept/
+
+        Only the freelancer (counterparty) may accept a proposed deal.
+        """
         deal = self.get_object()
-        if deal.freelancer != request.user and deal.client != request.user:
+        if deal.freelancer != request.user:
             return Response(
-                {"success": False, "error": {"code": "NOT_PARTICIPANT", "message": "Only deal participants can accept."}},
+                {"success": False, "error": {"code": "NOT_COUNTERPARTY", "message": "Only the assigned freelancer can accept a deal."}},
                 status=status.HTTP_403_FORBIDDEN,
             )
         try:
@@ -86,11 +120,22 @@ class DealViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="complete")
     def complete(self, request, pk=None):
-        """POST /api/v1/deals/{id}/complete/"""
+        """POST /api/v1/deals/{id}/complete/
+
+        Only the client may unilaterally mark a deal complete.
+        Both parties should submit completion confirmations afterward.
+        """
         deal = self.get_object()
+        if deal.client != request.user:
+            return Response(
+                {"success": False, "error": {"code": "NOT_CLIENT", "message": "Only the client can mark a deal as completed."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         try:
             transition_deal(deal, "COMPLETED")
             create_deal_snapshot(deal)
+            # Wire up the reputation pipeline — record events, then rebuild scores
+            process_deal_completion(deal)
             recalculate_reputation(deal)
         except InvalidTransition as e:
             return Response(
@@ -105,6 +150,8 @@ class DealViewSet(viewsets.ModelViewSet):
         deal = self.get_object()
         try:
             transition_deal(deal, "CANCELLED")
+            process_deal_cancellation(deal)
+            recalculate_reputation(deal)
         except InvalidTransition as e:
             return Response(
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
@@ -118,6 +165,8 @@ class DealViewSet(viewsets.ModelViewSet):
         deal = self.get_object()
         try:
             transition_deal(deal, "DISPUTED")
+            process_deal_dispute(deal)
+            recalculate_reputation(deal)
         except InvalidTransition as e:
             return Response(
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
@@ -149,6 +198,14 @@ class DealViewSet(viewsets.ModelViewSet):
                 {"success": False, "error": {"code": "NOT_PARTICIPANT", "message": "Only deal participants can submit confirmation."}},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # Only accept confirmations for completed deals
+        if deal.status != "COMPLETED":
+            return Response(
+                {"success": False, "error": {"code": "INVALID_STATUS", "message": "Completion confirmations can only be submitted for completed deals."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         serializer = CompletionConfirmationSerializer(
             data=request.data, context={"request": request, "view": self}
         )

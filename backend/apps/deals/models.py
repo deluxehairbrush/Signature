@@ -78,6 +78,7 @@ class DealSnapshot(models.Model):
     agreed_deliverables = models.TextField(blank=True)
     agreed_working_hours = models.CharField(max_length=100, blank=True)
     agreed_tags_snapshot = models.JSONField(default=list, blank=True)
+    proof_hash = models.CharField(max_length=64, blank=True, db_index=True, help_text="SHA-256 hash of immutable deal terms, computed once at snapshot time.")
     snapshot_created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
