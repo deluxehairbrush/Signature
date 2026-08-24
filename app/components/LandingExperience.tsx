@@ -20,6 +20,9 @@ import StepRuler from './StepRuler'
 import FilmstripRail from './FilmstripRail'
 import BottomPill from './BottomPill'
 import ChapterMenu from './ChapterMenu'
+import GrainOverlay from './GrainOverlay'
+import KineticHeadline from './KineticHeadline'
+import ParallaxLayer from './ParallaxLayer'
 import { chapters, bgClass } from './chapters'
 import { placeholderProfiles } from './placeholder-data'
 
@@ -133,6 +136,7 @@ export default function LandingExperience() {
       </header>
 
       <ChapterMenu open={menuOpen} onClose={() => setMenuOpen(false)} active={active} onJump={jumpTo} />
+      <GrainOverlay />
 
       {/* Horizontal chapter track — vertical scroll drives horizontal motion */}
       <section ref={trackRef} style={{ height: `${PANEL_COUNT * 100}vh` }} className="relative">
@@ -143,24 +147,28 @@ export default function LandingExperience() {
           <motion.div style={{ x }} className="flex h-full">
             {/* Chapter 00 — Hero */}
             <Panel index={0} progress={scrollYProgress} bg="ink" className="justify-center">
-              <FloatingShape size={140} className="absolute right-[14%] top-[18%] hidden lg:block" duration={16} />
-              <FloatingShape
-                size={70}
-                color="#F6F4EC"
-                className="absolute left-[10%] bottom-[24%] hidden lg:block"
-                duration={11}
-                delay={1.2}
-              />
-              <OpenBook size={130} className="absolute right-[6%] bottom-[16%] hidden lg:block" />
+              <ParallaxLayer strength={32} className="absolute right-[14%] top-[18%] hidden lg:block">
+                <FloatingShape size={140} duration={16} />
+              </ParallaxLayer>
+              <ParallaxLayer strength={18} className="absolute left-[10%] bottom-[24%] hidden lg:block">
+                <FloatingShape size={70} color="#F6F4EC" duration={11} delay={1.2} />
+              </ParallaxLayer>
+              <ParallaxLayer strength={44} className="absolute right-[6%] bottom-[16%] hidden lg:block">
+                <OpenBook size={130} />
+              </ParallaxLayer>
               <div className="mx-auto max-w-3xl px-6 md:px-16">
-                <p className="mb-6 font-display text-sm italic text-accent">
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.6, duration: 0.6 }}
+                  className="mb-6 font-display text-sm italic text-accent"
+                >
                   For freelancers and the people who hire them
-                </p>
-                <h1 className="font-display text-6xl italic leading-[1.05] md:text-8xl">
-                  Work you can trust.
-                  <br />
-                  Deals you can prove.
-                </h1>
+                </motion.p>
+                <KineticHeadline
+                  className="font-display text-6xl italic leading-[1.05] md:text-8xl"
+                  lines={['Work you can trust.', 'Deals you can prove.']}
+                />
                 <p className="mt-8 max-w-xl text-lg text-paper/70">
                   Signature is a public home for freelance work: a profile that
                   speaks for itself, and a track record that isn&apos;t just a claim.
@@ -267,7 +275,9 @@ export default function LandingExperience() {
                   ))}
                 </div>
               </div>
-              <FloatingShape size={130} color="#12120D" className="absolute right-[10%] top-[20%] hidden lg:block" duration={15} />
+              <ParallaxLayer strength={26} className="absolute right-[10%] top-[20%] hidden lg:block">
+                <FloatingShape size={130} color="#12120D" duration={15} />
+              </ParallaxLayer>
               <LineCallout
                 caption="Anyone can look. Only hiring needs an account."
                 tone="dark"
@@ -293,7 +303,7 @@ export default function LandingExperience() {
 
             {/* Chapter 05 — freelancer / client split */}
             <Panel index={5} progress={scrollYProgress} bg="paper" className="max-h-full justify-center overflow-y-auto py-24 md:overflow-visible md:py-0">
-              <FloatingShape size={90} color="#3A97F7" className="absolute left-[6%] top-[12%] hidden lg:block" duration={13} />
+              <FloatingShape size={90} color="#7C3AED" className="absolute left-[6%] top-[12%] hidden lg:block" duration={13} />
               <OpenBook size={110} coverColor="#12120D" pageColor="#F6F4EC" className="absolute right-[6%] bottom-[10%] hidden lg:block" />
               <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 md:grid-cols-2 md:gap-8 md:px-16">
                 <TiltCard>
@@ -362,8 +372,12 @@ export default function LandingExperience() {
 
             {/* Chapter 07 — closing CTA */}
             <Panel index={7} progress={scrollYProgress} bg="accent" className="justify-center">
-              <FloatingShape size={110} color="#12120D" className="absolute left-[10%] top-[16%] hidden lg:block" duration={14} />
-              <FloatingShape size={70} color="#3A97F7" className="absolute right-[12%] bottom-[20%] hidden lg:block" duration={10} delay={0.6} />
+              <ParallaxLayer strength={30} className="absolute left-[10%] top-[16%] hidden lg:block">
+                <FloatingShape size={110} color="#12120D" duration={14} />
+              </ParallaxLayer>
+              <ParallaxLayer strength={20} className="absolute right-[12%] bottom-[20%] hidden lg:block">
+                <FloatingShape size={70} color="#7C3AED" duration={10} delay={0.6} />
+              </ParallaxLayer>
               <div className="mx-auto max-w-2xl px-6 text-center text-ink">
                 <h2 className="font-display text-5xl italic md:text-6xl">
                   Ready to sign your name to it?

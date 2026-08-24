@@ -21,8 +21,8 @@ module.exports = {
           soft: '#F3F7A8',
         },
         signal: {
-          DEFAULT: '#3A97F7',
-          dark: '#1E6FD9',
+          DEFAULT: '#7C3AED',
+          dark: '#5B21B6',
         },
         muted: '#7A796C',
       },
