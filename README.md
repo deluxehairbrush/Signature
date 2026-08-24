@@ -1,373 +1,302 @@
 # Signature
 
-AI-powered contract analysis and validation system for freelance agreements.
+A public home for freelance work — a profile that speaks for itself, and a
+deal history that isn't just a claim. Freelancers and clients get real
+profiles, a searchable public directory, AI-assisted deal creation from a
+raw chat conversation, a real deal lifecycle (propose → accept → sign →
+complete), reviews, an open work board, in-app messaging, and
+notifications.
 
-## Overview
+**Live locally right now:** a Next.js frontend talking to a real Django
+REST backend — not a mockup. Every feature below has been exercised
+end-to-end against a running instance, not just wired and assumed to work.
 
-Signature provides intelligent tools to convert informal chat conversations into structured contract summaries and automatically detect potential red flags in freelance deals. The system uses Groq's LLM to extract key contract details and identify issues that might cause disputes.
+## Architecture
+
+```
+┌─────────────────────┐         ┌──────────────────────────┐
+│   Next.js frontend   │  REST   │   Django REST backend     │
+│   (this repo, root)  │◄───────►│   (backend/)               │
+│   app/, lib/, public/ │  JWT    │   apps/*, SQLite or        │
+└──────────┬───────────┘         │   PostgreSQL                │
+           │                     └──────────┬───────────────┘
+           │ same-origin                    │
+           ▼                                ▼
+   /api/ai/summarize              Groq (Llama 3.3 70B)
+   /api/ai/redflags               via lib/ai.ts, proxied from
+   (lib/ai.ts, Groq-backed)       backend/apps/ai_integration
+```
+
+The frontend and backend are separate deployables. The frontend calls the
+backend directly for everything (auth, profiles, deals, search,
+reputation, messaging, notifications) and calls its **own** `/api/ai/*`
+routes directly for AI summarization — the Django backend also exposes
+`/api/v1/ai/*` endpoints that proxy to those same Next.js routes
+server-to-server, for use by other backend-side consumers.
 
 ## Features
 
-### 🤖 AI Contract Summarization
-- **POST `/api/ai/summarize`** - Converts chat conversations into structured deal summaries
-- Extracts freelancer/client names, scope, price, deadline, payment terms, and revisions
-- Handles multi-language conversations (English, Hinglish, mixed)
-- Provides confidence levels and identifies missing fields
-- Returns structured JSON matching the deal schema
+### Brand & landing experience
+- Horizontal, scroll-hijacked "chapter" landing page (vertical scroll
+  drives horizontal motion) with 8 chapters: hero, what-this-is, create a
+  profile, get found, build a record, built for both sides, browse
+  profiles, closing CTA
+- Original design system (not a copy of any reference site's assets):
+  ink/paper/lime/violet palette, editorial serif (Fraunces) + sans
+  (Inter), hand-drawn diagonal annotation lines, a floating bottom "running
+  commentary" pill, a clickable right-edge chapter rail, a rotated
+  left-edge step ruler, a slide-in chapter menu
+- 3D touches: continuously-rotating isometric shapes, a 3D open-book
+  shape, mouse-tracked tilt cards, cursor-parallax on decorative shapes, a
+  direction-aware arrow cursor, a kinetic staggered headline reveal, a
+  subtle animated film-grain overlay
+- Fully responsive — verified narrow-viewport overflow fixes on every
+  panel, not just desktop
 
-### 🚩 Red Flag Detection
-- **POST `/api/ai/redflags`** - Analyzes deal summaries for potential issues
-- Detects missing or invalid prices, deadlines, and payment terms
-- Identifies vague or incomplete scope descriptions
-- Flags unrealistic deadlines based on work scope
-- Uses AI judgment for ambiguous scope cases
+### Auth
+- Real JWT registration/login against the Django backend
+  (`/api/v1/auth/register/`, `/login/`) — freelancer/client account type
+  chosen at signup
+- Google sign-in is stubbed (visibly disabled, "coming soon") — needs a
+  real Google Cloud OAuth client ID/secret that only the project owner can
+  create
 
-### 🔒 Rate Limiting
-- 10 requests per minute per user
-- Uses Supabase auth session for user identification
-- Falls back to IP-based limiting for unauthenticated requests
-- Prevents quota abuse during testing and development
+### Freelancer & client profiles
+- Freelancer: display name, headline, bio, location, timezone, hourly
+  rate/currency, availability status, working hours, tags, social/contact
+  links, portfolio (with image upload)
+- Client: company name, industry, location, website, and a free-text
+  "what are you hiring for" field (the backend's `ClientProfile` has no
+  dedicated budget/deadline columns yet, so this is the honest mapping
+  onto what exists today)
+- Public profile pages (`/freelancers/[username]`, `/clients/[username]`)
+  — **no account needed to view** — showing reputation breakdown
+  (on-time completions, fair compensation, disputes, not just one
+  aggregate score), portfolio grid, tags, and a "Hire" button
+- Authenticated edit pages (`/profile/freelancer`, `/profile/client`)
 
-### 🖼️ OCR Screenshot Support
-- **Dual input modes** - Paste chat text OR upload screenshots
-- **Client-side OCR** using tesseract.js (no API key, no server cost)
-- **Multiple upload methods** - File selection, drag & drop, Ctrl+V paste
-- **Progress tracking** - Real-time OCR progress indicator
-- **Confidence scoring** - Quality assessment with user warnings
-- **Editable preview** - Review and correct extracted text before submission
-- **Low-confidence warnings** - Alerts users when text quality is poor
-- **WhatsApp-friendly** - Optimized for chat screenshot extraction
+### Browse & search
+- `/browse` — live, debounced search against the backend's real search
+  API (`apps.search`): by name/headline/bio, availability filter, sort by
+  reputation/deals/rate. No placeholder data.
 
-### 🏆 Public Trust Badges
-- **GET `/badge/[username]`** - Public endpoint for user reputation badges
-- **GET `/badge/[username].svg`** - Same endpoint with .svg extension for embed contexts
-- Generates SVG badges showing trust score and deal count
-- Color-coded: green (70+), yellow (40-69), gray (<40 or no data)
-- No authentication required - designed for public embedding
-- Includes cache headers for performance (public, max-age=300)
-- Graceful error handling - always returns valid SVG
+### AI-assisted deal creation
+- Paste a chat conversation, or upload a screenshot (client-side OCR via
+  tesseract.js — no server cost, works entirely in the browser)
+- AI extraction (Groq, Llama 3.3 70B) pulls out scope, price, currency,
+  deadline, payment terms, and flags what it couldn't determine rather
+  than guessing
+- Automatic red-flag detection (missing price, vague scope, unrealistic
+  deadline, missing payment terms) shown before you create the deal
+- Everything extracted is editable before submission
 
-### ⚡ Error Handling
-- Graceful degradation when AI services fail
-- Fallback messages for frontend display
-- Proper HTTP status codes (429, 502, 503, 504)
-- Timeout detection and handling
-- Retry-after headers for rate-limited requests
+### Deal lifecycle
+- Real state machine on the backend: `DRAFT → PROPOSED → ACCEPTED →
+  COMPLETED` (plus `CANCELLED` / `DISPUTED` at various points), with a
+  cryptographic proof/snapshot taken at completion
+- A "Hire [name]" button from any public freelancer profile pre-fills deal
+  creation targeting that specific person
+- Deal detail page (`/deals/[id]`) exposes exactly the actions valid for
+  the current status (propose, accept, sign, complete, cancel, dispute)
+- A stamp-seal animation plays on successful deal creation
 
-## Project Structure
+### Open work board
+- A client can flag a deal "open to proposals" instead of assigning a
+  specific freelancer
+- `/deals/open` — any freelancer can browse open, unassigned deals and
+  claim one (first-come-first-served, not a multi-candidate queue)
+
+### Messaging
+- A chat thread scoped to each deal (not a global DM system) — visible
+  once a freelancer is assigned, for the two participants to discuss
+  specifics without leaving the site
+
+### Reviews / completion confirmations
+- Once a deal is `COMPLETED`, either party can submit a confirmation:
+  completed on time? compensation received/fair? work satisfactory? plus
+  a free-text comment — this is the "verifiable history" the whole
+  product is built around, not a self-reported star rating
+
+### Notifications
+- Notifications for every deal transition
+  (proposed, accepted, signed, completed, cancelled, disputed, applied)
+  and new messages, with an unread-count bell in the header of every
+  authenticated page
+
+### Public trust badges
+- `GET /badge/[username]` (this Next.js app) — embeddable SVG badge,
+  color-coded by score, currently using placeholder data pending backend
+  wiring
+- The Django backend separately exposes its own
+  `GET /api/v1/badges/{username}/` (SVG) and `/json/` — **not yet wired to
+  the Next.js route above**; these are two independent badge
+  implementations right now, worth consolidating
+
+## Tech stack
+
+**Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS
+v3, Framer Motion, Tesseract.js (client-side OCR)
+
+**Backend:** Django 5.1, Django REST Framework, SimpleJWT, django-filter,
+drf-spectacular (OpenAPI docs), PostgreSQL (SQLite for local dev without
+Docker)
+
+**AI:** Groq (Llama 3.3 70B Versatile) via the OpenAI-compatible SDK
+
+## Project structure
 
 ```
 Signature/
-├── app/
-│   ├── api/
-│   │   └── ai/
-│   │       ├── summarize/
-│   │       │   └── route.ts    # Chat-to-contract API endpoint
-│   │       └── redflags/
-│   │           └── route.ts    # Red flag detection API endpoint
-│   ├── badge/
-│   │   └── [username]/
-│   │       └── route.ts        # Public trust badge endpoint
-│   ├── components/
-│   │   └── DealForm.tsx        # Deal creation form with OCR support
-│   ├── test-ocr/
-│   │   └── page.tsx           # OCR testing page
-│   ├── globals.css             # Global styles
-│   ├── layout.tsx              # Root layout
-│   └── page.tsx               # Homepage with deal form
+├── app/                          # Next.js App Router
+│   ├── api/ai/                   # Groq-backed summarize/red-flags routes
+│   ├── badge/[username]/         # Public SVG badge (Next.js side)
+│   ├── browse/                   # Live freelancer search
+│   ├── freelancers/[username]/   # Public freelancer profile
+│   ├── clients/[username]/       # Public client profile
+│   ├── profile/{freelancer,client}/  # Authenticated profile editors
+│   ├── deals/                    # List, detail, new, open work board
+│   ├── login/, signup/           # Auth
+│   ├── how-it-works/             # Static explainer page
+│   └── components/               # Design system + feature components
 ├── lib/
-│   ├── ai.ts                  # Core AI functions (chatToContract, redFlagCheck, computeReputationScore)
-│   ├── ai-api.ts              # API utilities (rate limiting, error handling)
-│   └── ocr.ts                 # OCR utilities using tesseract.js
-├── scripts/
-│   ├── stress-chat-to-contract.ts  # AI testing utilities
-│   ├── test-badge.ts               # Badge logic testing
-│   └── test-ocr-basic.ts          # OCR utility testing
-├── next.config.js            # Next.js configuration
-└── package.json
+│   ├── ai.ts, ai-api.ts          # Groq extraction, rate limiting
+│   ├── ocr.ts                    # Client-side OCR (tesseract.js)
+│   └── api.ts                    # All Django backend API calls
+├── backend/                      # Django REST backend
+│   ├── apps/
+│   │   ├── accounts/             # JWT auth
+│   │   ├── profiles/             # Freelancer/client profiles
+│   │   ├── portfolio/            # Portfolio items (with public listing)
+│   │   ├── deals/                # Deal lifecycle, messages, notifications,
+│   │   │                         # open-work board, completion confirmations
+│   │   ├── reputation/           # Reputation scoring
+│   │   ├── search/                # Public freelancer/client search
+│   │   ├── signatures/           # Deal signing
+│   │   ├── tags/                  # Skill/industry tags
+│   │   ├── badges/                # Django-side SVG/JSON badges (unwired)
+│   │   ├── dashboard/             # Dashboard views (not yet used by frontend)
+│   │   └── ai_integration/        # Proxies to this app's /api/ai/* routes
+│   ├── config/                    # Django settings, urls
+│   └── manage.py
+├── scripts/                       # OCR test image generation/verification
+└── public/                        # Static assets (logo, etc.)
 ```
 
-## API Endpoints
+## Getting started
 
-### POST /api/ai/summarize
+### Frontend
 
-Converts a chat conversation into a structured deal summary.
-
-**Request Body:**
-```json
-{
-  "rawText": "string (required) - The chat conversation text"
-}
-```
-
-**Response:**
-```json
-{
-  "ok": true,
-  "deal": {
-    "freelancerName": "string | null",
-    "clientName": "string | null",
-    "scope": "string",
-    "price": "number | null",
-    "currency": "string",
-    "deadline": "string | null",
-    "paymentTerms": "string | null",
-    "revisions": "string | null",
-    "confidence": "high | medium | low",
-    "missingFields": ["string"]
-  }
-}
-```
-
-**Error Response:**
-```json
-{
-  "ok": false,
-  "error": "string",
-  "fallbackMessage": "Couldn't auto-generate the summary, you can fill it in manually"
-}
-```
-
-### POST /api/ai/redflags
-
-Analyzes a deal summary for potential red flags.
-
-**Request Body:**
-```json
-{
-  "deal": {
-    "freelancerName": "string | null",
-    "clientName": "string | null",
-    "scope": "string",
-    "price": "number | null",
-    "currency": "string",
-    "deadline": "string | null",
-    "paymentTerms": "string | null",
-    "revisions": "string | null",
-    "confidence": "high | medium | low",
-    "missingFields": ["string"]
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "ok": true,
-  "result": {
-    "hasRedFlags": "boolean",
-    "flags": [
-      {
-        "field": "string",
-        "issue": "string"
-      }
-    ]
-  }
-}
-```
-
-### GET /badge/[username]
-
-Generates a public SVG badge showing a user's trust score and deal count.
-
-**Parameters:**
-- `username` (path parameter) - The username to look up
-
-**Response:**
-- Content-Type: `image/svg+xml`
-- Returns an SVG badge with:
-  - Left side: "TrustGig" label
-  - Right side: Score (e.g., "87/100") and deal count (e.g., "12 deals")
-  - Color-coded based on score:
-    - Green (#10B981): Score 70+
-    - Yellow (#F59E0B): Score 40-69
-    - Gray (#9CA3AF): Score <40 or no data
-
-**Headers:**
-- `Cache-Control: public, max-age=300, s-maxage=600`
-- `Access-Control-Allow-Origin: *`
-
-**Examples:**
-- `/badge/johndoe` - Returns badge for user "johndoe"
-- `/badge/johndoe.svg` - Same endpoint with .svg extension for embed contexts
-
-**Behavior:**
-- If username doesn't exist or has no deals, returns "no data" badge
-- Never errors - always returns a valid SVG for embedding
-- Uses mock data currently - needs Supabase integration
-
-## OCR Integration
-
-The Signature app includes client-side OCR functionality using tesseract.js, allowing users to extract text from chat screenshots instead of manually copying and pasting.
-
-### Features
-
-**Dual Input Modes:**
-- **Text Mode**: Traditional text paste input
-- **Image Mode**: Screenshot upload with OCR extraction
-
-**Multiple Upload Methods:**
-- File selection via click
-- Drag and drop images
-- Clipboard paste (Ctrl+V)
-
-**OCR Processing:**
-- Real-time progress tracking with status updates
-- Confidence scoring (0-100%) 
-- Quality-based warnings for low-confidence extractions
-- Editable preview for user verification
-
-**Quality Thresholds:**
-- **High confidence (80%+)**: Text quality is good
-- **Medium confidence (60-79%)**: Acceptable but double-check numbers
-- **Low confidence (<60%)**: Poor quality, careful review needed
-
-**User Interface:**
-- Progress bar during OCR processing
-- Color-coded confidence indicators
-- Warning banners for low-quality extractions
-- Editable textarea for corrections before submission
-- Image preview with remove option
-
-### Usage Example
-
-1. **Upload Screenshot:**
-   - Click "Upload Screenshot" button
-   - Drag and drop an image, or
-   - Paste an image (Ctrl+V)
-
-2. **OCR Processing:**
-   - System extracts text automatically
-   - Progress bar shows processing status
-   - Confidence score displayed
-
-3. **Review and Edit:**
-   - Check extracted text for accuracy
-   - Correct any OCR errors (especially numbers/prices)
-   - Heed low-confidence warnings
-
-4. **Generate Contract:**
-   - Submit corrected text to AI analysis
-   - Get structured contract summary
-
-### Testing
-
-Visit `/test-ocr` to test OCR functionality with:
-- WhatsApp screenshots (light mode)
-- WhatsApp screenshots (dark mode)
-- Different image qualities
-- Various input methods
-
-**Actual Test Results:**
-- Light mode WhatsApp: 91% confidence ✅
-- Dark mode WhatsApp: 89% confidence ✅ (better than expected, contrast not an issue)
-- Low quality image: 89% confidence ⚠️ (warning system may need threshold adjustment)
-
-**Note:** Low-quality images are scoring higher confidence than expected, which may prevent warning banners from appearing when users actually need to verify extracted text. Consider adjusting confidence thresholds or creating more challenging test images.
-
-## Implementation Details
-
-### AI Model
-- Uses Groq's Llama 3.3 70B Versatile model
-- JSON schema validation with Zod
-- Retry logic for failed AI responses
-- Prompt engineering to prevent hallucination
-
-### Rate Limiting Strategy
-- In-memory rate limit buckets per user/IP
-- 60-second sliding window
-- 10 requests maximum per window
-- JWT token parsing for Supabase user identification
-- IP fallback for unauthenticated requests
-
-### Error Handling
-- Distinguishes between timeout, rate limit, and general errors
-- Returns appropriate HTTP status codes
-- Includes fallback messages for frontend display
-- Never blocks the form - allows manual entry as fallback
-
-### OCR Implementation
-- Client-side processing using tesseract.js (no server costs)
-- Progress tracking with real-time status updates
-- Confidence scoring with quality thresholds
-- Multiple input methods: file upload, drag & drop, clipboard paste
-- Editable preview for user verification before submission
-- Low-confidence warnings with user guidance
-- Optimized for chat screenshots (WhatsApp, etc.)
-- Graceful degradation on OCR failures
-
-### Badge System
-- SVG template-based generation (no external dependencies)
-- Shields.io-style badge layout
-- Color coding based on reputation score thresholds
-- Public endpoint with no authentication required
-- Cache headers for performance optimization
-- Graceful degradation - always returns valid SVG
-- Supports both `/badge/[username]` and `/badge/[username].svg` formats
-
-## Dependencies
-
-- `next` - Next.js framework
-- `openai` - OpenAI SDK for Groq API
-- `zod` - Schema validation
-- `typescript` - Type safety
-- `tesseract.js` - Client-side OCR for screenshot text extraction
-
-## Setup
-
-1. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Configure environment variables:
+Create `.env.local`:
 ```bash
-# Create .env.local with your Groq API key
 GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile   # optional, this is the default
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
 
-3. Run the development server:
 ```bash
 npm run dev
 ```
 
-4. Test the OCR functionality:
-- Visit `http://localhost:3000` for the main deal creation form
-- Visit `http://localhost:3000/test-ocr` for the OCR testing page
-- Upload WhatsApp screenshots (light and dark mode) to test text extraction
-- Try different input methods: file upload, drag & drop, and Ctrl+V paste
+### Backend
 
-## Current Status
+The backend defaults to PostgreSQL (matches `backend/docker-compose.yml`
+exactly), but supports a `DB_ENGINE=sqlite` opt-in for local dev without
+Docker/Postgres installed.
 
-✅ **Completed Features:**
-- AI contract summarization API endpoint
-- Red flag detection API endpoint  
-- Rate limiting implementation
-- Comprehensive error handling
-- TypeScript type safety
-- Zod schema validation
-- Public trust badge endpoint with SVG generation
-- Color-coded reputation badges
-- Cache headers for performance
-- Graceful error handling for badge endpoint
-- OCR screenshot support with tesseract.js
-- Dual input modes (text paste and image upload)
-- Real-time OCR progress tracking
-- Confidence scoring and quality warnings
-- Editable text preview before submission
-- Multiple upload methods (file, drag & drop, clipboard paste)
+**Option A — Docker (matches production config):**
+```bash
+cd backend
+docker compose up --build
+```
 
-🚧 **Future Enhancements:**
-- Supabase integration for badge data fetching
-- User authentication flow
-- Database persistence
-- Additional AI features
-- Unit tests
-- Integration tests
-- Badge customization options
-- Multi-language OCR support
-- Advanced image preprocessing for better OCR accuracy
-- Dark mode WhatsApp screenshot optimization
+**Option B — native, SQLite:**
+```bash
+cd backend
+python -m venv .venv
+.venv/Scripts/activate   # or source .venv/bin/activate on macOS/Linux
+pip install -r requirements.txt
+```
+Create `backend/.env`:
+```bash
+SECRET_KEY=dev-secret-key-not-for-production
+DEBUG=True
+DB_ENGINE=sqlite
+FRONTEND_URL=http://localhost:3000
+AI_SERVICE_URL=http://localhost:3000
+```
+```bash
+python manage.py migrate
+python manage.py runserver 0.0.0.0:8000
+```
+
+### Demo data
+
+```bash
+cd backend
+python manage.py seed_demo
+```
+
+Seeds 20 tags, 5 freelancers, 3 clients, and 5 deals across every status,
+with portfolio items, social links, reputation scores, and signatures.
+All demo accounts use password `demo1234` — e.g. `aisha@demo.com`,
+`james@techcorp.com`. See the command output for the full list.
+
+## API reference
+
+The backend auto-generates OpenAPI docs via drf-spectacular:
+- **Swagger UI:** `http://localhost:8000/api/docs/`
+- **Raw schema:** `http://localhost:8000/api/schema/`
+
+High-level endpoint groups (all under `/api/v1/`):
+
+| Area | Base path | Notes |
+|---|---|---|
+| Auth | `/auth/` | register, login, token/refresh, logout, me, change-password |
+| Freelancer profiles | `/freelancers/profile/`, `/freelancers/{username}/` | own-profile CRUD, public view |
+| Client profiles | `/clients/profile/`, `/clients/{username}/` | own-profile CRUD, public view |
+| Portfolio | `/portfolio/`, `/freelancers/{username}/portfolio/` | own-item CRUD, public listing |
+| Social links | `/social-links/` | authenticated CRUD |
+| Search | `/freelancers/?search=&tags=&min_rate=&max_rate=&availability_status=&ordering=`, `/clients/?...` | public, filterable |
+| Deals | `/deals/` | create/list/detail; actions: `propose`, `accept`, `sign`, `complete`, `cancel`, `dispute`, `apply`, `completion` (GET/POST), `messages` (GET/POST), `proof` |
+| Open work | `/deals/open/` | public list of deals flagged `is_open_to_proposals` |
+| Notifications | `/notifications/`, `/notifications/{id}/read/`, `/notifications/read-all/` | authenticated |
+| Reputation | `/reputation/{username}/` | public breakdown |
+| Tags | `/tags/` | |
+| AI (backend-proxied) | `/ai/summarize-deal/`, `/ai/red-flags/` | proxies to this Next.js app's own `/api/ai/*` |
+| Badges (Django-side) | `/badges/{username}/`, `/badges/{username}/json/` | not yet wired to the Next.js `/badge/[username]` route |
+
+## Design system
+
+- **Colors:** `ink` (#12120D), `paper` (#F6F4EC), `accent` lime
+  (#86C22A / pale wash #F3F7A8), `signal` violet (#7C3AED / dark #5B21B6)
+  — sampled and adapted from a scroll-storytelling reference, not copied
+  wholesale
+- **Type:** Fraunces (display/italic serif headlines) + Inter (body/UI),
+  loaded via `next/font/google`
+- All tokens live in `tailwind.config.js` — changing a color there
+  propagates through every page via shared components, not hardcoded
+  hex values
+
+## Known gaps / roadmap
+
+- **Google OAuth** — button exists, disabled; needs real credentials from
+  the project owner
+- **Client compensation/deadline** — no dedicated backend fields yet;
+  currently captured in a free-text field
+- **Two badge implementations** — the Next.js `/badge/[username]` route
+  (placeholder data) and the Django `/api/v1/badges/{username}/`
+  endpoint (real data) aren't consolidated
+- **`apps.dashboard`** exists on the backend but has no frontend pages
+  yet
+- **Notifications are fetched once per page load**, not push/websocket —
+  the bell won't update live if a notification arrives while you're
+  already on the page
+- **Open work board is first-come-first-served**, not a multi-candidate
+  application/review flow
 
 ## License
 
