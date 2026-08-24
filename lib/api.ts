@@ -325,6 +325,30 @@ export async function getPublicClient(username: string): Promise<PublicClientPro
   return data.profile
 }
 
+export type FreelancerSearchParams = {
+  search?: string
+  tags?: string
+  availability_status?: AvailabilityStatus
+  min_rate?: number
+  max_rate?: number
+  ordering?: string
+}
+
+export async function searchFreelancers(
+  params: FreelancerSearchParams = {},
+): Promise<PublicFreelancerProfile[]> {
+  const query = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') query.set(key, String(value))
+  })
+  const response = await safeFetch(`${API_BASE}/freelancers/?${query.toString()}`)
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  const data = await response.json()
+  return data.results ?? data
+}
+
 // ---------------------------------------------------------------------------
 // AI-assisted deal summarization — these hit this same Next.js app's own
 // /api/ai/* routes (lib/ai.ts, Groq-backed), not the Django backend. The
