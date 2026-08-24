@@ -5,7 +5,15 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '../../components/Logo'
 import PillLink from '../../components/PillLink'
-import { getPublicFreelancer, type PublicFreelancerProfile, type ApiError } from '../../../lib/api'
+import {
+  getPublicFreelancer,
+  getPublicPortfolio,
+  getPublicReputation,
+  type PublicFreelancerProfile,
+  type PublicPortfolioItem,
+  type Reputation,
+  type ApiError,
+} from '../../../lib/api'
 
 const AVAILABILITY_LABEL: Record<string, string> = {
   AVAILABLE: 'Open to work',
@@ -16,6 +24,8 @@ const AVAILABILITY_LABEL: Record<string, string> = {
 export default function FreelancerPublicProfile() {
   const params = useParams<{ username: string }>()
   const [profile, setProfile] = useState<PublicFreelancerProfile | null>(null)
+  const [portfolio, setPortfolio] = useState<PublicPortfolioItem[]>([])
+  const [reputation, setReputation] = useState<Reputation | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -24,6 +34,8 @@ export default function FreelancerPublicProfile() {
       .then(setProfile)
       .catch((err: ApiError) => setError(err.message || 'Could not load this profile.'))
       .finally(() => setLoading(false))
+    getPublicPortfolio(params.username).then(setPortfolio).catch(() => {})
+    getPublicReputation(params.username).then(setReputation).catch(() => {})
   }, [params.username])
 
   return (
@@ -74,7 +86,17 @@ export default function FreelancerPublicProfile() {
 
             {profile.bio && <p className="mt-6 max-w-xl leading-relaxed text-ink/80">{profile.bio}</p>}
 
-            <div className="mt-8 flex gap-8 rounded-2xl border border-ink/10 bg-white/50 p-6">
+            {profile.tags.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {profile.tags.map((t) => (
+                  <span key={t.id} className="rounded-pill bg-ink/5 px-2.5 py-1 text-xs text-ink/60">
+                    {t.name}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-8 flex flex-wrap gap-8 rounded-2xl border border-ink/10 bg-white/50 p-6">
               <div>
                 <p className="font-display text-3xl italic">{profile.reputation_score}</p>
                 <p className="text-xs text-muted">Reputation score</p>
@@ -88,6 +110,51 @@ export default function FreelancerPublicProfile() {
                 <p className="text-xs text-muted">Successful deals</p>
               </div>
             </div>
+
+            {reputation && reputation.completed_deals > 0 && (
+              <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl border border-ink/10 bg-white/30 p-6 sm:grid-cols-4">
+                <div>
+                  <p className="font-display text-xl italic">{reputation.on_time_completions}</p>
+                  <p className="text-[11px] text-muted">On-time completions</p>
+                </div>
+                <div>
+                  <p className="font-display text-xl italic">{reputation.fair_compensation_count}</p>
+                  <p className="text-[11px] text-muted">Fair compensation</p>
+                </div>
+                <div>
+                  <p className="font-display text-xl italic">{reputation.both_confirmed_count}</p>
+                  <p className="text-[11px] text-muted">Both sides confirmed</p>
+                </div>
+                <div>
+                  <p className="font-display text-xl italic">{reputation.disputes}</p>
+                  <p className="text-[11px] text-muted">Disputes</p>
+                </div>
+              </div>
+            )}
+
+            {portfolio.length > 0 && (
+              <div className="mt-10">
+                <p className="text-xs uppercase tracking-widest text-muted">Portfolio</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  {portfolio.map((item) => (
+                    <a
+                      key={item.id}
+                      href={item.project_url || undefined}
+                      target={item.project_url ? '_blank' : undefined}
+                      rel="noreferrer"
+                      className="block rounded-2xl border border-ink/10 bg-white/50 p-5 hover:border-ink/30"
+                    >
+                      {item.image && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.image} alt="" className="mb-3 h-32 w-full rounded-lg object-cover" />
+                      )}
+                      <p className="font-display italic">{item.title}</p>
+                      {item.description && <p className="mt-1 text-sm text-muted">{item.description}</p>}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {profile.social_links.length > 0 && (
               <div className="mt-8 flex flex-wrap gap-3">
@@ -105,18 +172,21 @@ export default function FreelancerPublicProfile() {
               </div>
             )}
 
-            {profile.social_links.length > 0 ? (
-              <a
-                href={profile.social_links[0].url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-10 inline-block rounded-pill bg-ink px-6 py-3 text-sm font-medium text-paper hover:opacity-90"
-              >
-                Contact {profile.display_name || profile.full_name}
-              </a>
-            ) : (
-              <p className="mt-10 text-sm text-muted">No contact method listed yet.</p>
-            )}
+            <div className="mt-10 flex flex-wrap gap-3">
+              <PillLink href={`/deals/new?freelancer=${profile.username}`} variant="dark">
+                Hire {profile.display_name || profile.full_name}
+              </PillLink>
+              {profile.social_links.length > 0 && (
+                <a
+                  href={profile.social_links[0].url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center rounded-pill border border-ink/15 px-6 py-3 text-sm hover:border-ink/40"
+                >
+                  Contact directly
+                </a>
+              )}
+            </div>
           </>
         )}
       </div>

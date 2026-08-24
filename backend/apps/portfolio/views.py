@@ -1,9 +1,15 @@
+from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 from rest_framework import permissions, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.profiles.models import FreelancerProfile
 
 from .models import PortfolioItem
-from .serializers import PortfolioItemSerializer
+from .serializers import PortfolioItemSerializer, PublicPortfolioItemSerializer
+
+User = get_user_model()
 
 
 class IsPortfolioOwner(permissions.BasePermission):
@@ -27,3 +33,18 @@ class PortfolioItemViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         profile = FreelancerProfile.objects.get(user=self.request.user)
         serializer.save(freelancer=profile)
+
+
+class PublicPortfolioView(APIView):
+    """GET /api/v1/portfolio/{username}/ — a freelancer's public, visible items."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, username):
+        user = get_object_or_404(User, username=username)
+        items = PortfolioItem.objects.filter(
+            freelancer__user=user, is_public=True
+        ).select_related("freelancer")
+        return Response(
+            {"success": True, "items": PublicPortfolioItemSerializer(items, many=True).data}
+        )

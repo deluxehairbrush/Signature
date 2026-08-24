@@ -8,5 +8,8 @@ router = DefaultRouter()
 router.register(r"portfolio", views.PortfolioItemViewSet, basename="portfolio")
 
 urlpatterns = [
+    # Namespaced under freelancers/ (not portfolio/<username>/) so it can't
+    # collide with the router's /portfolio/{pk}/ detail route above.
+    path("freelancers/<str:username>/portfolio/", views.PublicPortfolioView.as_view(), name="public-portfolio"),
     path("", include(router.urls)),
 ]

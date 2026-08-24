@@ -63,6 +63,7 @@ export default function FreelancerProfilePage() {
 
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([])
   const [newPortfolio, setNewPortfolio] = useState({ title: '', description: '', project_url: '', category: 'OTHER' })
+  const [newPortfolioImage, setNewPortfolioImage] = useState<File | null>(null)
 
   const [socials, setSocials] = useState<SocialLink[]>([])
   const [newSocial, setNewSocial] = useState<{ platform: SocialLinkPlatform; url: string }>({
@@ -146,9 +147,10 @@ export default function FreelancerProfilePage() {
     e.preventDefault()
     if (!newPortfolio.title.trim()) return
     try {
-      const item = await createPortfolioItem(newPortfolio)
+      const item = await createPortfolioItem({ ...newPortfolio, imageFile: newPortfolioImage })
       setPortfolio((prev) => [item, ...prev])
       setNewPortfolio({ title: '', description: '', project_url: '', category: 'OTHER' })
+      setNewPortfolioImage(null)
     } catch {
       setError('Could not add that portfolio item — is the backend running?')
     }
@@ -256,9 +258,15 @@ export default function FreelancerProfilePage() {
         <div className="mt-6 space-y-3">
           {portfolio.map((item) => (
             <div key={item.id} className="flex items-start justify-between rounded-xl border border-ink/10 bg-white/50 p-4">
-              <div>
-                <p className="font-medium">{item.title}</p>
-                {item.description && <p className="mt-1 text-sm text-muted">{item.description}</p>}
+              <div className="flex items-start gap-3">
+                {item.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.image} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                )}
+                <div>
+                  <p className="font-medium">{item.title}</p>
+                  {item.description && <p className="mt-1 text-sm text-muted">{item.description}</p>}
+                </div>
               </div>
               <button type="button" onClick={() => handleRemovePortfolio(item.id)} className="text-xs text-muted hover:text-ink">
                 Remove
@@ -279,6 +287,15 @@ export default function FreelancerProfilePage() {
               ))}
             </FormSelect>
           </div>
+          <label className="block text-xs uppercase tracking-widest text-muted">
+            Image (optional)
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setNewPortfolioImage(e.target.files?.[0] ?? null)}
+              className="mt-1.5 block w-full text-xs text-ink/70"
+            />
+          </label>
           <button type="submit" className="rounded-pill border border-ink/20 px-5 py-2 text-sm hover:border-ink/50">
             Add project
           </button>

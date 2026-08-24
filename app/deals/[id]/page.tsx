@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import DashboardShell from '../../components/DashboardShell'
-import { getDeal, performDealAction, readSession, type Deal, type DealAction } from '../../../lib/api'
+import {
+  getDeal,
+  getDealCompletions,
+  performDealAction,
+  readSession,
+  submitDealCompletion,
+  type CompletionConfirmation,
+  type Deal,
+  type DealAction,
+} from '../../../lib/api'
 
 const STATUS_LABEL: Record<Deal['status'], string> = {
   DRAFT: 'Draft',
@@ -44,11 +53,44 @@ export default function DealDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<DealAction | null>(null)
 
+  const [completions, setCompletions] = useState<CompletionConfirmation[]>([])
+  const [reviewForm, setReviewForm] = useState({
+    completed_on_time: true,
+    compensation_received: true,
+    compensation_fair: true,
+    work_satisfactory: true,
+    comment: '',
+  })
+  const [submittingReview, setSubmittingReview] = useState(false)
+  const myUserId = readSession()?.user.id
+
   const load = useCallback(() => {
     getDeal(Number(params.id))
-      .then(setDeal)
+      .then((d) => {
+        setDeal(d)
+        if (d.status === 'COMPLETED') {
+          getDealCompletions(d.id).then(setCompletions).catch(() => {})
+        }
+      })
       .catch((err) => setError(err?.message || 'Could not load this deal.'))
   }, [params.id])
+
+  async function handleSubmitReview(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmittingReview(true)
+    try {
+      const confirmation = await submitDealCompletion(Number(params.id), reviewForm)
+      setCompletions((prev) => [confirmation, ...prev])
+    } catch (err) {
+      setError(
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Could not submit that confirmation.',
+      )
+    } finally {
+      setSubmittingReview(false)
+    }
+  }
 
   useEffect(() => {
     if (!readSession()) {
@@ -116,6 +158,65 @@ export default function DealDetailPage() {
             <div>
               <p className="text-xs uppercase tracking-widest text-muted">Deadline</p>
               <p className="mt-1 text-sm text-ink/80">{new Date(deal.deadline).toLocaleDateString()}</p>
+            </div>
+          )}
+
+          {deal.status === 'COMPLETED' && (
+            <div className="border-t border-ink/10 pt-6">
+              <p className="text-xs uppercase tracking-widest text-muted">Confirmations</p>
+
+              <div className="mt-3 space-y-3">
+                {completions.map((c) => (
+                  <div key={c.id} className="rounded-xl border border-ink/10 bg-white/50 p-4 text-sm">
+                    <div className="flex flex-wrap gap-3 text-xs text-muted">
+                      <span>{c.completed_on_time ? '✓ On time' : '✕ Not on time'}</span>
+                      <span>{c.compensation_fair ? '✓ Fair pay' : '✕ Pay not fair'}</span>
+                      <span>{c.work_satisfactory ? '✓ Satisfactory' : '✕ Not satisfactory'}</span>
+                    </div>
+                    {c.comment && <p className="mt-2 text-ink/80">{c.comment}</p>}
+                  </div>
+                ))}
+                {completions.length === 0 && (
+                  <p className="text-sm text-muted">No confirmations submitted yet.</p>
+                )}
+              </div>
+
+              {!completions.some((c) => c.submitted_by === myUserId) && (
+                <form onSubmit={handleSubmitReview} className="mt-4 space-y-3 rounded-xl border border-dashed border-ink/15 p-4">
+                  <p className="text-sm font-medium">Confirm what happened</p>
+                  {[
+                    ['completed_on_time', 'Completed on time'],
+                    ['compensation_received', 'Compensation received'],
+                    ['compensation_fair', 'Compensation was fair'],
+                    ['work_satisfactory', 'Work was satisfactory'],
+                  ].map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={reviewForm[key as keyof typeof reviewForm] as boolean}
+                        onChange={(e) =>
+                          setReviewForm((prev) => ({ ...prev, [key]: e.target.checked }))
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                  <textarea
+                    value={reviewForm.comment}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, comment: e.target.value }))}
+                    placeholder="Anything worth noting for future clients or freelancers?"
+                    rows={2}
+                    className="w-full rounded-xl border border-ink/15 bg-white/60 px-4 py-2 text-sm outline-none focus:border-signal"
+                  />
+                  <button
+                    type="submit"
+                    disabled={submittingReview}
+                    className="rounded-pill bg-ink px-5 py-2 text-sm text-paper hover:opacity-90 disabled:opacity-50"
+                  >
+                    {submittingReview ? 'Submitting…' : 'Submit confirmation'}
+                  </button>
+                </form>
+              )}
             </div>
           )}
 

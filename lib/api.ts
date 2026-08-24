@@ -122,10 +122,14 @@ async function authedFetch(path: string, options: RequestInit = {}): Promise<Res
     throw { message: 'You need to sign in first.' } satisfies ApiError
   }
 
+  // Skip the JSON content-type for FormData bodies — the browser needs to
+  // set its own multipart boundary, which a manual header would override.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+
   const response = await safeFetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       Authorization: `Bearer ${session.tokens.access}`,
       ...options.headers,
     },
@@ -273,11 +277,23 @@ export async function getMyPortfolioItems(): Promise<PortfolioItem[]> {
 }
 
 export async function createPortfolioItem(
-  input: Partial<PortfolioItem>,
+  input: Partial<PortfolioItem> & { imageFile?: File | null },
 ): Promise<PortfolioItem> {
+  const { imageFile, ...rest } = input
+
+  if (imageFile) {
+    const formData = new FormData()
+    Object.entries(rest).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) formData.set(key, String(value))
+    })
+    formData.set('image', imageFile)
+    const response = await authedFetch('/portfolio/', { method: 'POST', body: formData })
+    return response.json()
+  }
+
   const response = await authedFetch('/portfolio/', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify(rest),
   })
   return response.json()
 }
@@ -314,6 +330,20 @@ export async function getPublicFreelancer(username: string): Promise<PublicFreel
   }
   const data = await response.json()
   return data.profile
+}
+
+export type PublicPortfolioItem = Pick<
+  PortfolioItem,
+  'id' | 'title' | 'description' | 'project_url' | 'image' | 'category'
+>
+
+export async function getPublicPortfolio(username: string): Promise<PublicPortfolioItem[]> {
+  const response = await safeFetch(`${API_BASE}/freelancers/${username}/portfolio/`)
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  const data = await response.json()
+  return data.items
 }
 
 export async function getPublicClient(username: string): Promise<PublicClientProfile> {
@@ -455,6 +485,7 @@ export async function createDeal(input: {
   deadline?: string | null
   working_hours?: string
   terms?: string
+  freelancer?: string | null
 }): Promise<Deal> {
   const response = await authedFetch('/deals/', {
     method: 'POST',
@@ -489,4 +520,70 @@ export async function performDealAction(id: number, action: DealAction): Promise
   const response = await authedFetch(`/deals/${id}/${action}/`, { method: 'POST' })
   const data = await response.json()
   return data.deal
+}
+
+// ---------------------------------------------------------------------------
+// Reputation — richer public breakdown than what's embedded in the
+// freelancer profile serializer (adds on-time/fair-comp/dispute counts).
+// ---------------------------------------------------------------------------
+
+export type Reputation = {
+  username: string
+  score: number
+  completed_deals: number
+  on_time_completions: number
+  fair_compensation_count: number
+  both_confirmed_count: number
+  cancelled_deals: number
+  disputes: number
+}
+
+export async function getPublicReputation(username: string): Promise<Reputation> {
+  const response = await safeFetch(`${API_BASE}/reputation/${username}/`)
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  const data = await response.json()
+  return data.reputation
+}
+
+// ---------------------------------------------------------------------------
+// Completion confirmations — a deal-scoped "review": once a deal is
+// COMPLETED, either party can confirm what actually happened (on time?
+// paid fairly? work satisfactory?) plus a free-text comment.
+// ---------------------------------------------------------------------------
+
+export type CompletionConfirmation = {
+  id: number
+  submitted_by: number
+  completed_on_time: boolean
+  compensation_received: boolean
+  compensation_fair: boolean
+  work_satisfactory: boolean
+  comment: string
+  submitted_at: string
+}
+
+export async function getDealCompletions(dealId: number): Promise<CompletionConfirmation[]> {
+  const response = await authedFetch(`/deals/${dealId}/completion/`)
+  const data = await response.json()
+  return data.completions
+}
+
+export async function submitDealCompletion(
+  dealId: number,
+  input: {
+    completed_on_time: boolean
+    compensation_received: boolean
+    compensation_fair: boolean
+    work_satisfactory: boolean
+    comment: string
+  },
+): Promise<CompletionConfirmation> {
+  const response = await authedFetch(`/deals/${dealId}/completion/`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  const data = await response.json()
+  return data.confirmation
 }

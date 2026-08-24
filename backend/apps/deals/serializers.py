@@ -56,8 +56,11 @@ class DealCreateSerializer(serializers.ModelSerializer):
     tags = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Tag.objects.all(), required=False
     )
-    freelancer = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), required=False, allow_null=True
+    # By username, not pk: nothing in the public API surface (search,
+    # public profile) ever exposes a user's numeric id, so a client has no
+    # way to address a freelancer except by the username it already knows.
+    freelancer = serializers.SlugRelatedField(
+        slug_field="username", queryset=User.objects.all(), required=False, allow_null=True
     )
 
     class Meta:

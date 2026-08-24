@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import DashboardShell from '../../components/DashboardShell'
 import FormField, { FormTextarea } from '../../components/FormField'
 import StampSeal from '../../components/StampSeal'
@@ -27,8 +27,10 @@ function toDateInputValue(iso: string | null): string {
   return match ? match[0] : ''
 }
 
-export default function NewDealPage() {
+function NewDealForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const freelancerUsername = searchParams.get('freelancer')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [ready, setReady] = useState(false)
@@ -116,6 +118,7 @@ export default function NewDealPage() {
         currency,
         deadline: deadline || null,
         terms,
+        freelancer: freelancerUsername || null,
       })
       setStamped(true)
       setTimeout(() => router.push(`/deals/${deal.id}`), 1100)
@@ -143,6 +146,11 @@ export default function NewDealPage() {
       title="Start a deal"
       subtitle="Paste the chat where you agreed on the work — AI pulls out the scope, price, and deadline, and flags anything missing."
     >
+      {freelancerUsername && (
+        <div className="mb-6 inline-flex items-center gap-2 rounded-pill bg-accent-soft px-4 py-1.5 text-xs text-ink">
+          For @{freelancerUsername}
+        </div>
+      )}
       <div className="space-y-3">
         <FormTextarea
           tone="light"
@@ -234,5 +242,13 @@ export default function NewDealPage() {
 
       <StampSeal show={stamped} label="Deal issued" />
     </DashboardShell>
+  )
+}
+
+export default function NewDealPage() {
+  return (
+    <Suspense fallback={null}>
+      <NewDealForm />
+    </Suspense>
   )
 }
