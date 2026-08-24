@@ -436,7 +436,16 @@ export async function createDeal(input: {
     method: 'POST',
     body: JSON.stringify(input),
   })
-  return response.json()
+  const created = await response.json()
+
+  // DealCreateSerializer's fields don't include id/public_id, so the create
+  // response has no way to address the new deal. Fall back to the list
+  // endpoint (ordered newest-first) to find it.
+  if (created.id) {
+    return created
+  }
+  const mine = await listMyDeals()
+  return getDeal(mine[0].id)
 }
 
 export async function getDeal(id: number): Promise<Deal> {

@@ -80,18 +80,27 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # ---------------------------------------------------------------------------
-# Database – PostgreSQL only
+# Database – PostgreSQL by default (matches docker-compose); set
+# DB_ENGINE=sqlite for local dev without Postgres/Docker available.
 # ---------------------------------------------------------------------------
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB", "signature_db"),
-        "USER": os.getenv("POSTGRES_USER", "signature_user"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "signature_pass"),
-        "HOST": os.getenv("POSTGRES_HOST", "localhost"),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
+if os.getenv("DB_ENGINE") == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", "signature_db"),
+            "USER": os.getenv("POSTGRES_USER", "signature_user"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "signature_pass"),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        }
+    }
 
 # ---------------------------------------------------------------------------
 # Auth

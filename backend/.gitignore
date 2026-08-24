@@ -12,6 +12,8 @@ build/
 .env
 .env.local
 .env.production
+.venv/
+dev.log
 
 # Django
 db.sqlite3
