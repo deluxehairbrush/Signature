@@ -139,3 +139,49 @@ AI proxy work correctly.
 - CI/CD (auto-deploy on push) — both Vercel and most Django hosts support
   this natively via their GitHub integration, not covered here
 - Backups for the Postgres database — host-specific, set up separately
+
+## 5. Troubleshooting: Docker Desktop crash on Windows
+
+If `docker compose up` (or Docker Desktop itself) fails to start with an
+error like:
+
+```
+starting services: initializing Inference manager: listening on
+unix://...\Docker\run\dockerInference: remove ...\dockerInference:
+The file cannot be accessed by the system.
+```
+
+This is a Docker Desktop bug on Windows in its "Docker AI / Ask Gordon"
+inference-manager feature — it creates AF_UNIX socket files as NTFS
+reparse points, and on some machines that reparse point gets corrupted
+badly enough that **no Windows-native tool can delete it** (Explorer,
+`del`, `rmdir`, PowerShell `Remove-Item`, even `robocopy /MIR` all fail
+with the same "file cannot be accessed" / error 1920). It's not caused by
+anything in this repo — anyone with that feature enabled on Windows can
+hit it.
+
+**Fix (do both — the cleanup unblocks the immediate crash, the setting
+change stops it recurring):**
+
+1. **Clean up the corrupted socket files.** Windows tools can't touch
+   them, but WSL2 can (via its `/mnt/c/...` filesystem access, which
+   sidesteps whatever is broken about the NTFS reparse point):
+   ```powershell
+   # Quit Docker Desktop first
+   Stop-Process -Name "Docker Desktop" -Force -ErrorAction SilentlyContinue
+   Get-Process | Where-Object { $_.ProcessName -like "*docker*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+   ```
+   ```bash
+   wsl -d Ubuntu-22.04 -- rm -f "/mnt/c/Users/<you>/AppData/Local/Docker/run/dockerInference" "/mnt/c/Users/<you>/AppData/Local/Docker/run/userAnalyticsOtlpHttp.sock"
+   ```
+   (Substitute your actual WSL distro name from `wsl -l -v`, and check
+   `%LOCALAPPDATA%\Docker\run\` for any other stuck `.sock` files — delete
+   those the same way.)
+
+2. **Disable the feature so it doesn't recur.** Quit Docker Desktop, edit
+   `%APPDATA%\Docker\settings-store.json`, set `"EnableDockerAI": false`,
+   then restart Docker Desktop. (Or in the GUI once it's running:
+   **Settings → Beta features** → turn off Docker AI / Ask Gordon.)
+
+After both steps, Docker Desktop should start cleanly and
+`docker compose up` in `backend/` will work as documented in §1.
