@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardShell from '../../components/DashboardShell'
 import FormField, { FormTextarea } from '../../components/FormField'
+import StampSeal from '../../components/StampSeal'
 import {
   aiCheckRedFlags,
   aiSummarizeChat,
@@ -48,6 +49,7 @@ export default function NewDealPage() {
   const [terms, setTerms] = useState('')
 
   const [creating, setCreating] = useState(false)
+  const [stamped, setStamped] = useState(false)
 
   useEffect(() => {
     const session = readSession()
@@ -115,7 +117,8 @@ export default function NewDealPage() {
         deadline: deadline || null,
         terms,
       })
-      router.push(`/deals/${deal.id}`)
+      setStamped(true)
+      setTimeout(() => router.push(`/deals/${deal.id}`), 1100)
     } catch (err) {
       setError(
         err && typeof err === 'object' && 'message' in err
@@ -228,6 +231,8 @@ export default function NewDealPage() {
           </button>
         </form>
       )}
+
+      <StampSeal show={stamped} label="Deal issued" />
     </DashboardShell>
   )
 }

@@ -22,6 +22,17 @@ export type ApiError = {
   fields?: Record<string, string[]>
 }
 
+// Wraps fetch so a network-level failure (backend not running, DNS error,
+// CORS block, offline) throws the same ApiError shape as an HTTP error
+// response, instead of leaking a raw "Failed to fetch" TypeError.
+async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, options)
+  } catch {
+    throw { message: 'Could not reach the server. Is the backend running?' } satisfies ApiError
+  }
+}
+
 async function parseError(response: Response): Promise<ApiError> {
   try {
     const data = await response.json()
@@ -52,7 +63,7 @@ export async function register(input: {
   password: string
   password_confirm: string
 }): Promise<{ user: AuthUser; tokens: AuthTokens }> {
-  const response = await fetch(`${API_BASE}/auth/register/`, {
+  const response = await safeFetch(`${API_BASE}/auth/register/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -69,7 +80,7 @@ export async function login(input: {
   email: string
   password: string
 }): Promise<{ user: AuthUser; tokens: AuthTokens }> {
-  const response = await fetch(`${API_BASE}/auth/login/`, {
+  const response = await safeFetch(`${API_BASE}/auth/login/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -111,7 +122,7 @@ async function authedFetch(path: string, options: RequestInit = {}): Promise<Res
     throw { message: 'You need to sign in first.' } satisfies ApiError
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await safeFetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -297,7 +308,7 @@ export async function deleteSocialLink(id: number): Promise<void> {
 }
 
 export async function getPublicFreelancer(username: string): Promise<PublicFreelancerProfile> {
-  const response = await fetch(`${API_BASE}/freelancers/${username}/`)
+  const response = await safeFetch(`${API_BASE}/freelancers/${username}/`)
   if (!response.ok) {
     throw await parseError(response)
   }
@@ -306,7 +317,7 @@ export async function getPublicFreelancer(username: string): Promise<PublicFreel
 }
 
 export async function getPublicClient(username: string): Promise<PublicClientProfile> {
-  const response = await fetch(`${API_BASE}/clients/${username}/`)
+  const response = await safeFetch(`${API_BASE}/clients/${username}/`)
   if (!response.ok) {
     throw await parseError(response)
   }
@@ -343,7 +354,7 @@ export type RedFlagResult = {
 }
 
 export async function aiSummarizeChat(rawText: string): Promise<DealSummary> {
-  const response = await fetch('/api/ai/summarize', {
+  const response = await safeFetch('/api/ai/summarize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rawText }),
@@ -356,7 +367,7 @@ export async function aiSummarizeChat(rawText: string): Promise<DealSummary> {
 }
 
 export async function aiCheckRedFlags(deal: DealSummary): Promise<RedFlagResult> {
-  const response = await fetch('/api/ai/redflags', {
+  const response = await safeFetch('/api/ai/redflags', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deal }),
