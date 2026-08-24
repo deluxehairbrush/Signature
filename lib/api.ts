@@ -313,3 +313,136 @@ export async function getPublicClient(username: string): Promise<PublicClientPro
   const data = await response.json()
   return data.profile
 }
+
+// ---------------------------------------------------------------------------
+// AI-assisted deal summarization — these hit this same Next.js app's own
+// /api/ai/* routes (lib/ai.ts, Groq-backed), not the Django backend. The
+// Django backend has its own /api/v1/ai/summarize-deal/ and /red-flags/
+// endpoints, but those simply proxy to these same routes server-to-server
+// (see AI_SERVICE_URL in backend/apps/ai_integration/services.py) — calling
+// them directly here avoids an extra network hop and an auth requirement
+// that isn't needed for a same-origin same-app call.
+// ---------------------------------------------------------------------------
+
+export type DealSummary = {
+  freelancerName: string | null
+  clientName: string | null
+  scope: string
+  price: number | null
+  currency: string
+  deadline: string | null
+  paymentTerms: string | null
+  revisions: string | null
+  confidence: 'high' | 'medium' | 'low'
+  missingFields: string[]
+}
+
+export type RedFlagResult = {
+  hasRedFlags: boolean
+  flags: { field: string; issue: string }[]
+}
+
+export async function aiSummarizeChat(rawText: string): Promise<DealSummary> {
+  const response = await fetch('/api/ai/summarize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rawText }),
+  })
+  const data = await response.json()
+  if (!response.ok || !data.ok) {
+    throw { message: data.error || data.fallbackMessage || 'AI summarization failed.' } satisfies ApiError
+  }
+  return data.deal
+}
+
+export async function aiCheckRedFlags(deal: DealSummary): Promise<RedFlagResult> {
+  const response = await fetch('/api/ai/redflags', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deal }),
+  })
+  const data = await response.json()
+  if (!response.ok || !data.ok) {
+    throw { message: data.error || data.fallbackMessage || 'Red-flag check failed.' } satisfies ApiError
+  }
+  return data.result
+}
+
+// ---------------------------------------------------------------------------
+// Deals — the Django backend's real deal lifecycle
+// ---------------------------------------------------------------------------
+
+export type DealStatus = 'DRAFT' | 'PROPOSED' | 'ACCEPTED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED'
+
+export type Deal = {
+  id: number
+  public_id: string
+  client: number
+  client_username: string
+  freelancer: number | null
+  freelancer_username: string | null
+  title: string
+  description: string
+  scope: string
+  deliverables: string
+  compensation_amount: string | null
+  currency: string
+  deadline: string | null
+  working_hours: string
+  terms: string
+  status: DealStatus
+  tags: Tag[]
+  created_at: string
+}
+
+export type DealListItem = Pick<
+  Deal,
+  | 'id'
+  | 'public_id'
+  | 'title'
+  | 'client_username'
+  | 'freelancer_username'
+  | 'compensation_amount'
+  | 'currency'
+  | 'status'
+  | 'deadline'
+  | 'created_at'
+  | 'tags'
+>
+
+export async function createDeal(input: {
+  title: string
+  description?: string
+  scope?: string
+  deliverables?: string
+  compensation_amount?: number | null
+  currency?: string
+  deadline?: string | null
+  working_hours?: string
+  terms?: string
+}): Promise<Deal> {
+  const response = await authedFetch('/deals/', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return response.json()
+}
+
+export async function getDeal(id: number): Promise<Deal> {
+  const response = await authedFetch(`/deals/${id}/`)
+  return response.json()
+}
+
+export async function listMyDeals(): Promise<DealListItem[]> {
+  const response = await authedFetch('/deals/')
+  const data = await response.json()
+  return Array.isArray(data) ? data : data.results
+}
+
+export type DealAction = 'propose' | 'accept' | 'sign' | 'complete' | 'cancel' | 'dispute'
+
+export async function performDealAction(id: number, action: DealAction): Promise<Deal> {
+  const response = await authedFetch(`/deals/${id}/${action}/`, { method: 'POST' })
+  const data = await response.json()
+  return data.deal
+}

@@ -98,11 +98,16 @@ export default function ClientProfilePage() {
       title="Your client profile"
       subtitle="What freelancers see before they say yes to working with you."
       action={
-        username ? (
-          <PillLink href={`/clients/${username}`} variant="light">
-            View public profile
+        <div className="flex gap-3">
+          <PillLink href="/deals" variant="light">
+            Your deals
           </PillLink>
-        ) : undefined
+          {username && (
+            <PillLink href={`/clients/${username}`} variant="light">
+              View public profile
+            </PillLink>
+          )}
+        </div>
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
