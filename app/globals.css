@@ -1,14 +1,26 @@
-/* Basic styles for the Signature app */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background-color: #f6f4ec;
+  color: #12120d;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hand-drawn diagonal accent line, echoing the annotation lines used
+   throughout the reference design to connect a callout to its subject. */
+.accent-line {
+  stroke: currentColor;
+  stroke-width: 1;
+  fill: none;
 }
