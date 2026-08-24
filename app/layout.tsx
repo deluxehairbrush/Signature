@@ -1,5 +1,6 @@
 import { Fraunces, Inter } from 'next/font/google'
 import type { Metadata } from 'next'
+import CursorDot from './components/CursorDot'
 import './globals.css'
 
 const display = Fraunces({
@@ -27,7 +28,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <CursorDot />
+        {children}
+      </body>
     </html>
   )
 }

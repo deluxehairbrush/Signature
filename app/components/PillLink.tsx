@@ -23,7 +23,7 @@ export default function PillLink({
   return (
     <Link
       href={href}
-      className={`inline-flex items-center gap-2 rounded-pill px-6 py-3 text-sm font-medium transition-colors ${variants[variant]} ${className}`}
+      className={`inline-flex items-center gap-2 whitespace-nowrap rounded-pill px-4 py-2 text-xs font-medium transition-colors sm:px-6 sm:py-3 sm:text-sm ${variants[variant]} ${className}`}
     >
       {children}
     </Link>

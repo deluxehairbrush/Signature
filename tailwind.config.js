@@ -16,8 +16,13 @@ module.exports = {
           dim: '#EDEADD',
         },
         accent: {
-          DEFAULT: '#C7F464',
-          dark: '#9FD230',
+          DEFAULT: '#86C22A',
+          dark: '#6FA31E',
+          soft: '#F3F7A8',
+        },
+        signal: {
+          DEFAULT: '#3A97F7',
+          dark: '#1E6FD9',
         },
         muted: '#7A796C',
       },

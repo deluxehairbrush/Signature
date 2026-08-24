@@ -24,3 +24,12 @@ body {
   stroke-width: 1;
   fill: none;
 }
+
+/* Custom cursor dot replaces the native pointer on precise-pointer devices;
+   touch devices keep their normal cursor behavior untouched. */
+@media (pointer: fine) {
+  a,
+  button {
+    cursor: none;
+  }
+}
