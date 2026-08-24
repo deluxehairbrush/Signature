@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       const session = await login({ email, password })
       storeSession(session)
-      router.push('/')
+      router.push(session.user.user_type === 'FREELANCER' ? '/profile/freelancer' : '/profile/client')
     } catch (err) {
       const message =
         err && typeof err === 'object' && 'message' in err

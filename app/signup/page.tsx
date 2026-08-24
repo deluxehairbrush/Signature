@@ -38,7 +38,7 @@ function SignupForm() {
         password_confirm: passwordConfirm,
       })
       storeSession(session)
-      router.push('/')
+      router.push(userType === 'FREELANCER' ? '/profile/freelancer' : '/profile/client')
     } catch (err) {
       const message =
         err && typeof err === 'object' && 'message' in err

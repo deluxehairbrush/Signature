@@ -19,8 +19,16 @@ export const chapters: Chapter[] = [
     pill: 'Scroll to begin →',
   },
   {
-    key: 'profile',
+    key: 'about',
     index: '01',
+    title: 'What this is',
+    range: 'The idea',
+    bg: 'paper',
+    pill: 'A public record, not a rating app',
+  },
+  {
+    key: 'profile',
+    index: '02',
     title: 'Create a profile',
     range: 'Freelancers & clients',
     bg: 'signal',
@@ -28,7 +36,7 @@ export const chapters: Chapter[] = [
   },
   {
     key: 'discover',
-    index: '02',
+    index: '03',
     title: 'Get found, or go looking',
     range: 'Public by default',
     bg: 'accent',
@@ -36,7 +44,7 @@ export const chapters: Chapter[] = [
   },
   {
     key: 'record',
-    index: '03',
+    index: '04',
     title: 'Build a record',
     range: 'Every deal counts',
     bg: 'ink',
@@ -44,7 +52,7 @@ export const chapters: Chapter[] = [
   },
   {
     key: 'split',
-    index: '04',
+    index: '05',
     title: 'Built for both sides',
     range: 'Freelancers + clients',
     bg: 'paper',
@@ -52,7 +60,7 @@ export const chapters: Chapter[] = [
   },
   {
     key: 'browse',
-    index: '05',
+    index: '06',
     title: 'Browse profiles',
     range: 'Live directory',
     bg: 'signal',
@@ -60,7 +68,7 @@ export const chapters: Chapter[] = [
   },
   {
     key: 'cta',
-    index: '06',
+    index: '07',
     title: 'Sign your name to it',
     range: 'Get started',
     bg: 'accent',

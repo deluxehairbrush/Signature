@@ -138,7 +138,7 @@ export default function LandingExperience() {
       <section ref={trackRef} style={{ height: `${PANEL_COUNT * 100}vh` }} className="relative">
         <div className="sticky top-0 h-screen overflow-hidden" style={{ perspective: 1800 }}>
           <StepRuler active={active} />
-          <FilmstripRail active={active} />
+          <FilmstripRail active={active} onJump={jumpTo} />
 
           <motion.div style={{ x }} className="flex h-full">
             {/* Chapter 00 — Hero */}
@@ -180,11 +180,47 @@ export default function LandingExperience() {
               </div>
             </Panel>
 
-            {/* Chapter 01 — Create a profile */}
-            <Panel index={1} progress={scrollYProgress} bg="signal" className="justify-center">
+            {/* Chapter 01 — What this is */}
+            <Panel index={1} progress={scrollYProgress} bg="paper" className="max-h-full justify-center overflow-y-auto py-24 md:overflow-visible md:py-0">
+              <div className="mx-auto max-w-4xl px-6 md:px-16">
+                <p className="text-xs uppercase tracking-widest text-muted">The idea</p>
+                <h2 className="mt-3 font-display text-2xl italic leading-snug md:mt-4 md:text-5xl">
+                  Freelance trust shouldn&apos;t live in screenshots and DM threads.
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-ink/70 md:mt-6 md:text-lg">
+                  Most freelance work still runs on scattered chats, invoices
+                  nobody double-checks, and reputations nobody can verify.
+                  Signature gives every freelancer and client a public page —
+                  plus a record of what they actually delivered — that works
+                  as both a pitch and a receipt.
+                </p>
+
+                <div className="mt-6 grid grid-cols-1 gap-4 md:mt-12 md:grid-cols-2 md:gap-8">
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-signal">What it is</p>
+                    <ul className="mt-2 space-y-1.5 text-xs text-ink/80 md:mt-3 md:space-y-2 md:text-sm">
+                      <li>A public profile, viewable without an account</li>
+                      <li>A history built from completed deals, not self-reported stars</li>
+                      <li>One place to point to instead of a folder of screenshots</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-muted">What it isn&apos;t</p>
+                    <ul className="mt-2 space-y-1.5 text-xs text-ink/60 md:mt-3 md:space-y-2 md:text-sm">
+                      <li>Not a marketplace that bids your rate down</li>
+                      <li>Not a rating anyone can leave without a real deal behind it</li>
+                      <li>Not a wall of testimonials you have to take on faith</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </Panel>
+
+            {/* Chapter 02 — Create a profile */}
+            <Panel index={2} progress={scrollYProgress} bg="signal" className="justify-center">
               <div className="mx-auto grid w-full max-w-5xl grid-cols-1 items-center gap-16 px-6 md:grid-cols-2 md:px-16">
                 <div>
-                  <span className="font-display text-8xl italic text-paper/20">01</span>
+                  <span className="font-display text-8xl italic text-paper/20">02</span>
                   <h3 className="mt-4 font-display text-4xl italic">Create a profile</h3>
                   <p className="mt-4 max-w-md text-base leading-relaxed text-paper/70">
                     Freelancers list their work, rates, and availability. Clients
@@ -212,10 +248,10 @@ export default function LandingExperience() {
               />
             </Panel>
 
-            {/* Chapter 02 — Get found, or go looking */}
-            <Panel index={2} progress={scrollYProgress} bg="accent" className="justify-center">
+            {/* Chapter 03 — Get found, or go looking */}
+            <Panel index={3} progress={scrollYProgress} bg="accent" className="justify-center">
               <div className="mx-auto w-full max-w-5xl px-6 md:px-16">
-                <span className="font-display text-8xl italic text-ink/20">02</span>
+                <span className="font-display text-8xl italic text-ink/20">03</span>
                 <h3 className="mt-4 font-display text-4xl italic text-ink">Get found, or go looking</h3>
                 <div className="mt-10 grid grid-cols-2 gap-8 md:grid-cols-4">
                   {[
@@ -238,11 +274,11 @@ export default function LandingExperience() {
               />
             </Panel>
 
-            {/* Chapter 03 — Build a record */}
-            <Panel index={3} progress={scrollYProgress} bg="ink" className="justify-center">
+            {/* Chapter 04 — Build a record */}
+            <Panel index={4} progress={scrollYProgress} bg="ink" className="justify-center">
               <div className="mx-auto grid w-full max-w-5xl grid-cols-1 items-center gap-8 px-6 md:grid-cols-2 md:px-16">
                 <div>
-                  <span className="font-display text-8xl italic text-paper/15">03</span>
+                  <span className="font-display text-8xl italic text-paper/15">04</span>
                   <h3 className="mt-4 font-display text-4xl italic">Build a record</h3>
                   <p className="mt-4 max-w-md text-base leading-relaxed text-paper/60">
                     Every completed deal adds to a verifiable history: on-time
@@ -255,8 +291,8 @@ export default function LandingExperience() {
               <LineCallout caption="Not a star rating. An actual timeline." tone="light" />
             </Panel>
 
-            {/* Chapter 04 — freelancer / client split */}
-            <Panel index={4} progress={scrollYProgress} bg="paper" className="max-h-full justify-center overflow-y-auto py-24 md:overflow-visible md:py-0">
+            {/* Chapter 05 — freelancer / client split */}
+            <Panel index={5} progress={scrollYProgress} bg="paper" className="max-h-full justify-center overflow-y-auto py-24 md:overflow-visible md:py-0">
               <FloatingShape size={90} color="#3A97F7" className="absolute left-[6%] top-[12%] hidden lg:block" duration={13} />
               <OpenBook size={110} coverColor="#12120D" pageColor="#F6F4EC" className="absolute right-[6%] bottom-[10%] hidden lg:block" />
               <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 md:grid-cols-2 md:gap-8 md:px-16">
@@ -291,8 +327,8 @@ export default function LandingExperience() {
               </div>
             </Panel>
 
-            {/* Chapter 05 — browse preview */}
-            <Panel index={5} progress={scrollYProgress} bg="signal" className="max-h-full justify-center overflow-y-auto py-24 md:overflow-visible md:py-0">
+            {/* Chapter 06 — browse preview */}
+            <Panel index={6} progress={scrollYProgress} bg="signal" className="max-h-full justify-center overflow-y-auto py-24 md:overflow-visible md:py-0">
               <div className="mx-auto w-full max-w-5xl px-6 md:px-16">
                 <h2 className="font-display text-2xl italic md:text-4xl">
                   Look someone up — no account needed
@@ -324,8 +360,8 @@ export default function LandingExperience() {
               </div>
             </Panel>
 
-            {/* Chapter 06 — closing CTA */}
-            <Panel index={6} progress={scrollYProgress} bg="accent" className="justify-center">
+            {/* Chapter 07 — closing CTA */}
+            <Panel index={7} progress={scrollYProgress} bg="accent" className="justify-center">
               <FloatingShape size={110} color="#12120D" className="absolute left-[10%] top-[16%] hidden lg:block" duration={14} />
               <FloatingShape size={70} color="#3A97F7" className="absolute right-[12%] bottom-[20%] hidden lg:block" duration={10} delay={0.6} />
               <div className="mx-auto max-w-2xl px-6 text-center text-ink">
