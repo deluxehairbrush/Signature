@@ -49,6 +49,7 @@ function NewDealForm() {
   const [currency, setCurrency] = useState('INR')
   const [deadline, setDeadline] = useState('')
   const [terms, setTerms] = useState('')
+  const [openToProposals, setOpenToProposals] = useState(false)
 
   const [creating, setCreating] = useState(false)
   const [stamped, setStamped] = useState(false)
@@ -119,6 +120,7 @@ function NewDealForm() {
         deadline: deadline || null,
         terms,
         freelancer: freelancerUsername || null,
+        is_open_to_proposals: !freelancerUsername && openToProposals,
       })
       setStamped(true)
       setTimeout(() => router.push(`/deals/${deal.id}`), 1100)
@@ -229,6 +231,17 @@ function NewDealForm() {
           </div>
 
           <FormTextarea tone="light" label="Payment terms & revisions" rows={2} value={terms} onChange={(e) => setTerms(e.target.value)} />
+
+          {!freelancerUsername && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={openToProposals}
+                onChange={(e) => setOpenToProposals(e.target.checked)}
+              />
+              List this publicly so freelancers can apply, instead of assigning someone yourself
+            </label>
+          )}
 
           <button
             type="submit"

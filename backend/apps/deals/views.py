@@ -1,5 +1,5 @@
 from django.db import models as db_models
-from rest_framework import permissions, status, viewsets
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -10,12 +10,15 @@ from apps.reputation.services import (
     recalculate_reputation,
 )
 
-from .models import CompletionConfirmation, Deal
+from .models import CompletionConfirmation, Deal, DealMessage, Notification
 from .serializers import (
     CompletionConfirmationSerializer,
     DealCreateSerializer,
     DealDetailSerializer,
     DealListSerializer,
+    DealMessageSerializer,
+    NotificationSerializer,
+    OpenDealSerializer,
 )
 from .services import (
     InvalidTransition,
@@ -23,6 +26,14 @@ from .services import (
     create_deal_snapshot,
     transition_deal,
 )
+
+
+def notify(recipient, deal, verb, message):
+    """Create a notification, skipping silently if there's no one to notify
+    (e.g. a deal with no freelancer assigned yet)."""
+    if recipient is None:
+        return
+    Notification.objects.create(recipient=recipient, deal=deal, verb=verb, message=message)
 
 
 class IsDealParticipant(permissions.BasePermission):
@@ -36,8 +47,17 @@ class DealViewSet(viewsets.ModelViewSet):
     serializer_class = DealDetailSerializer
     permission_classes = [permissions.IsAuthenticated, IsDealParticipant]
 
+    def get_permissions(self):
+        # "apply" is the one action a non-participant is meant to hit — the
+        # whole point is claiming a deal you're not part of yet.
+        if self.action == "apply":
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
+
     def get_queryset(self):
         user = self.request.user
+        if self.action == "apply":
+            return Deal.objects.filter(is_open_to_proposals=True, freelancer__isnull=True, status="DRAFT")
         return Deal.objects.filter(
             db_models.Q(client=user) | db_models.Q(freelancer=user)
         ).select_related("client", "freelancer").prefetch_related("tags")
@@ -79,6 +99,7 @@ class DealViewSet(viewsets.ModelViewSet):
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        notify(deal.freelancer, deal, Notification.Verb.PROPOSED, f'"{deal.title}" was proposed to you.')
         return Response({"success": True, "deal": DealDetailSerializer(deal).data})
 
     @action(detail=True, methods=["post"], url_path="accept")
@@ -100,6 +121,7 @@ class DealViewSet(viewsets.ModelViewSet):
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        notify(deal.client, deal, Notification.Verb.ACCEPTED, f'{deal.freelancer.username} accepted "{deal.title}".')
         return Response({"success": True, "deal": DealDetailSerializer(deal).data})
 
     @action(detail=True, methods=["post"], url_path="sign")
@@ -116,6 +138,8 @@ class DealViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         deal.refresh_from_db()
+        other = deal.freelancer if request.user == deal.client else deal.client
+        notify(other, deal, Notification.Verb.SIGNED, f'{request.user.username} signed "{deal.title}".')
         return Response({"success": True, "message": "Signed successfully.", "deal": DealDetailSerializer(deal).data})
 
     @action(detail=True, methods=["post"], url_path="complete")
@@ -142,6 +166,7 @@ class DealViewSet(viewsets.ModelViewSet):
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        notify(deal.freelancer, deal, Notification.Verb.COMPLETED, f'"{deal.title}" was marked complete.')
         return Response({"success": True, "deal": DealDetailSerializer(deal).data})
 
     @action(detail=True, methods=["post"], url_path="cancel")
@@ -157,6 +182,8 @@ class DealViewSet(viewsets.ModelViewSet):
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        other = deal.freelancer if request.user == deal.client else deal.client
+        notify(other, deal, Notification.Verb.CANCELLED, f'"{deal.title}" was cancelled.')
         return Response({"success": True, "deal": DealDetailSerializer(deal).data})
 
     @action(detail=True, methods=["post"], url_path="dispute")
@@ -172,6 +199,32 @@ class DealViewSet(viewsets.ModelViewSet):
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        other = deal.freelancer if request.user == deal.client else deal.client
+        notify(other, deal, Notification.Verb.DISPUTED, f'"{deal.title}" was disputed.')
+        return Response({"success": True, "deal": DealDetailSerializer(deal).data})
+
+    @action(detail=True, methods=["post"], url_path="apply")
+    def apply(self, request, pk=None):
+        """POST /api/v1/deals/{id}/apply/
+
+        A freelancer claims an open, unassigned deal. First come, first
+        served — not a multi-candidate application queue.
+        """
+        deal = self.get_object()
+        if getattr(request.user, "user_type", None) != "FREELANCER":
+            return Response(
+                {"success": False, "error": {"code": "NOT_FREELANCER", "message": "Only freelancer accounts can apply."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not deal.is_open_to_proposals or deal.freelancer is not None or deal.status != "DRAFT":
+            return Response(
+                {"success": False, "error": {"code": "NOT_OPEN", "message": "This deal isn't open to proposals."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        deal.freelancer = request.user
+        deal.is_open_to_proposals = False
+        deal.save(update_fields=["freelancer", "is_open_to_proposals"])
+        notify(deal.client, deal, Notification.Verb.APPLIED, f'{request.user.username} applied to "{deal.title}".')
         return Response({"success": True, "deal": DealDetailSerializer(deal).data})
 
     @action(detail=True, methods=["get"], url_path="proof")
@@ -212,3 +265,60 @@ class DealViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"success": True, "confirmation": serializer.data}, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get", "post"], url_path="messages")
+    def messages(self, request, pk=None):
+        """GET/POST /api/v1/deals/{id}/messages/ — a chat thread scoped to this deal."""
+        deal = self.get_object()
+
+        if request.method == "GET":
+            thread = deal.messages.select_related("sender")
+            return Response({
+                "success": True,
+                "messages": DealMessageSerializer(thread, many=True).data,
+            })
+
+        serializer = DealMessageSerializer(
+            data=request.data, context={"request": request, "view": self}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        other = deal.freelancer if request.user == deal.client else deal.client
+        notify(other, deal, Notification.Verb.MESSAGE, f'New message on "{deal.title}".')
+
+        return Response({"success": True, "message_obj": serializer.data}, status=status.HTTP_201_CREATED)
+
+
+class OpenDealListView(generics.ListAPIView):
+    """GET /api/v1/deals/open/ — deals a client has opened up for proposals."""
+
+    serializer_class = OpenDealSerializer
+    permission_classes = [permissions.AllowAny]
+    queryset = (
+        Deal.objects.filter(is_open_to_proposals=True, freelancer__isnull=True, status="DRAFT")
+        .select_related("client")
+        .prefetch_related("tags")
+    )
+
+
+class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    """GET /api/v1/notifications/ and /api/v1/notifications/{id}/read/"""
+
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user).select_related("deal")
+
+    @action(detail=True, methods=["post"], url_path="read")
+    def read(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save(update_fields=["is_read"])
+        return Response({"success": True, "notification": NotificationSerializer(notification).data})
+
+    @action(detail=False, methods=["post"], url_path="read-all")
+    def read_all(self, request):
+        self.get_queryset().filter(is_read=False).update(is_read=True)
+        return Response({"success": True})

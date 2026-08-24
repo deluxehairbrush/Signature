@@ -486,6 +486,7 @@ export async function createDeal(input: {
   working_hours?: string
   terms?: string
   freelancer?: string | null
+  is_open_to_proposals?: boolean
 }): Promise<Deal> {
   const response = await authedFetch('/deals/', {
     method: 'POST',
@@ -586,4 +587,95 @@ export async function submitDealCompletion(
   })
   const data = await response.json()
   return data.confirmation
+}
+
+// ---------------------------------------------------------------------------
+// Open work board — clients can flag a DRAFT, unassigned deal as open to
+// proposals; any freelancer can browse and claim one (first come, first
+// served — not a multi-candidate application queue).
+// ---------------------------------------------------------------------------
+
+export type OpenDeal = {
+  id: number
+  public_id: string
+  title: string
+  description: string
+  scope: string
+  compensation_amount: string | null
+  currency: string
+  deadline: string | null
+  working_hours: string
+  client_username: string
+  tags: Tag[]
+  created_at: string
+}
+
+export async function listOpenDeals(): Promise<OpenDeal[]> {
+  const response = await safeFetch(`${API_BASE}/deals/open/`)
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+  const data = await response.json()
+  return data.results ?? data
+}
+
+export async function applyToDeal(id: number): Promise<Deal> {
+  const response = await authedFetch(`/deals/${id}/apply/`, { method: 'POST' })
+  const data = await response.json()
+  return data.deal
+}
+
+// ---------------------------------------------------------------------------
+// Deal-scoped messaging
+// ---------------------------------------------------------------------------
+
+export type DealMessage = {
+  id: number
+  sender: number
+  sender_username: string
+  body: string
+  created_at: string
+}
+
+export async function getDealMessages(dealId: number): Promise<DealMessage[]> {
+  const response = await authedFetch(`/deals/${dealId}/messages/`)
+  const data = await response.json()
+  return data.messages
+}
+
+export async function sendDealMessage(dealId: number, body: string): Promise<DealMessage> {
+  const response = await authedFetch(`/deals/${dealId}/messages/`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  })
+  const data = await response.json()
+  return data.message_obj
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export type Notification = {
+  id: number
+  deal: number
+  deal_title: string
+  verb: string
+  message: string
+  is_read: boolean
+  created_at: string
+}
+
+export async function listNotifications(): Promise<Notification[]> {
+  const response = await authedFetch('/notifications/')
+  const data = await response.json()
+  return data.results ?? data
+}
+
+export async function markNotificationRead(id: number): Promise<void> {
+  await authedFetch(`/notifications/${id}/read/`, { method: 'POST' })
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await authedFetch('/notifications/read-all/', { method: 'POST' })
 }

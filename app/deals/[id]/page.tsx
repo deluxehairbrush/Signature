@@ -6,12 +6,15 @@ import DashboardShell from '../../components/DashboardShell'
 import {
   getDeal,
   getDealCompletions,
+  getDealMessages,
   performDealAction,
   readSession,
+  sendDealMessage,
   submitDealCompletion,
   type CompletionConfirmation,
   type Deal,
   type DealAction,
+  type DealMessage,
 } from '../../../lib/api'
 
 const STATUS_LABEL: Record<Deal['status'], string> = {
@@ -64,6 +67,10 @@ export default function DealDetailPage() {
   const [submittingReview, setSubmittingReview] = useState(false)
   const myUserId = readSession()?.user.id
 
+  const [messages, setMessages] = useState<DealMessage[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
+
   const load = useCallback(() => {
     getDeal(Number(params.id))
       .then((d) => {
@@ -71,9 +78,29 @@ export default function DealDetailPage() {
         if (d.status === 'COMPLETED') {
           getDealCompletions(d.id).then(setCompletions).catch(() => {})
         }
+        getDealMessages(d.id).then(setMessages).catch(() => {})
       })
       .catch((err) => setError(err?.message || 'Could not load this deal.'))
   }, [params.id])
+
+  async function handleSendMessage(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newMessage.trim()) return
+    setSendingMessage(true)
+    try {
+      const message = await sendDealMessage(Number(params.id), newMessage)
+      setMessages((prev) => [...prev, message])
+      setNewMessage('')
+    } catch (err) {
+      setError(
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Could not send that message.',
+      )
+    } finally {
+      setSendingMessage(false)
+    }
+  }
 
   async function handleSubmitReview(e: React.FormEvent) {
     e.preventDefault()
@@ -158,6 +185,43 @@ export default function DealDetailPage() {
             <div>
               <p className="text-xs uppercase tracking-widest text-muted">Deadline</p>
               <p className="mt-1 text-sm text-ink/80">{new Date(deal.deadline).toLocaleDateString()}</p>
+            </div>
+          )}
+
+          {deal.freelancer_username && (
+            <div className="border-t border-ink/10 pt-6">
+              <p className="text-xs uppercase tracking-widest text-muted">Messages</p>
+              <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+                {messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
+                      m.sender === myUserId ? 'ml-auto bg-ink text-paper' : 'bg-white/60'
+                    }`}
+                  >
+                    {m.sender !== myUserId && (
+                      <p className="mb-0.5 text-[11px] opacity-60">{m.sender_username}</p>
+                    )}
+                    {m.body}
+                  </div>
+                ))}
+                {messages.length === 0 && <p className="text-sm text-muted">No messages yet.</p>}
+              </div>
+              <form onSubmit={handleSendMessage} className="mt-3 flex gap-2">
+                <input
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Message about this deal…"
+                  className="flex-1 rounded-pill border border-ink/15 bg-white/60 px-4 py-2 text-sm outline-none focus:border-signal"
+                />
+                <button
+                  type="submit"
+                  disabled={sendingMessage}
+                  className="rounded-pill bg-ink px-5 py-2 text-sm text-paper hover:opacity-90 disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </form>
             </div>
           )}
 

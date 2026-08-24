@@ -29,9 +29,14 @@ export default function DealsListPage() {
       title="Your deals"
       subtitle="Everything you've proposed, agreed to, or completed."
       action={
-        <PillLink href="/deals/new" variant="dark">
-          Start a deal
-        </PillLink>
+        <div className="flex gap-3">
+          <PillLink href="/deals/open" variant="light">
+            Open work
+          </PillLink>
+          <PillLink href="/deals/new" variant="dark">
+            Start a deal
+          </PillLink>
+        </div>
       }
     >
       {loading && <p className="text-muted">Loading…</p>}

@@ -49,6 +49,11 @@ class Deal(models.Model):
         db_index=True,
     )
     tags = models.ManyToManyField("tags.Tag", blank=True, related_name="deals")
+    is_open_to_proposals = models.BooleanField(
+        default=False,
+        help_text="If true and no freelancer is assigned, this deal is listed "
+        "publicly for freelancers to apply to.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -110,3 +115,47 @@ class CompletionConfirmation(models.Model):
 
     def __str__(self):
         return f"Confirmation for {self.deal.title} by {self.submitted_by.username}"
+
+
+class DealMessage(models.Model):
+    """A chat message scoped to a single deal, between its two participants."""
+
+    deal = models.ForeignKey(Deal, on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.sender.username} on {self.deal.title}: {self.body[:40]}"
+
+
+class Notification(models.Model):
+    """A notification for a deal-related event (status change, new message)."""
+
+    class Verb(models.TextChoices):
+        PROPOSED = "PROPOSED", "Deal proposed"
+        ACCEPTED = "ACCEPTED", "Deal accepted"
+        SIGNED = "SIGNED", "Deal signed"
+        COMPLETED = "COMPLETED", "Deal completed"
+        CANCELLED = "CANCELLED", "Deal cancelled"
+        DISPUTED = "DISPUTED", "Deal disputed"
+        APPLIED = "APPLIED", "Freelancer applied"
+        MESSAGE = "MESSAGE", "New message"
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
+    )
+    deal = models.ForeignKey(Deal, on_delete=models.CASCADE, related_name="notifications")
+    verb = models.CharField(max_length=20, choices=Verb.choices)
+    message = models.CharField(max_length=300)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.verb} -> {self.recipient.username}: {self.message}"

@@ -4,7 +4,7 @@ from rest_framework import serializers
 from apps.tags.models import Tag
 from apps.tags.serializers import TagSerializer
 
-from .models import CompletionConfirmation, Deal, DealSnapshot
+from .models import CompletionConfirmation, Deal, DealMessage, DealSnapshot, Notification
 
 User = get_user_model()
 
@@ -69,6 +69,7 @@ class DealCreateSerializer(serializers.ModelSerializer):
             "title", "description", "scope", "deliverables",
             "compensation_amount", "currency", "deadline",
             "working_hours", "terms", "freelancer", "tags",
+            "is_open_to_proposals",
         ]
 
     def create(self, validated_data):
@@ -100,3 +101,41 @@ class DealSnapshotSerializer(serializers.ModelSerializer):
         model = DealSnapshot
         fields = "__all__"
         read_only_fields = fields
+
+
+class OpenDealSerializer(serializers.ModelSerializer):
+    """Public-facing listing for deals a client has opened up for proposals."""
+
+    client_username = serializers.CharField(source="client.username", read_only=True)
+    tags = TagSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Deal
+        fields = [
+            "id", "public_id", "title", "description", "scope",
+            "compensation_amount", "currency", "deadline",
+            "working_hours", "client_username", "tags", "created_at",
+        ]
+
+
+class DealMessageSerializer(serializers.ModelSerializer):
+    sender_username = serializers.CharField(source="sender.username", read_only=True)
+
+    class Meta:
+        model = DealMessage
+        fields = ["id", "deal", "sender", "sender_username", "body", "created_at"]
+        read_only_fields = ["id", "deal", "sender", "sender_username", "created_at"]
+
+    def create(self, validated_data):
+        validated_data["sender"] = self.context["request"].user
+        validated_data["deal"] = self.context["view"].get_object()
+        return super().create(validated_data)
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    deal_title = serializers.CharField(source="deal.title", read_only=True)
+
+    class Meta:
+        model = Notification
+        fields = ["id", "deal", "deal_title", "verb", "message", "is_read", "created_at"]
+        read_only_fields = ["id", "deal", "deal_title", "verb", "message", "created_at"]
