@@ -323,7 +323,12 @@ Both deploy configs live in this repo and are meant to be used together:
   a catch-all rewrite — both are required, a services block alone isn't
   enough to route traffic. Set `NEXT_PUBLIC_API_URL` to your Render
   backend's `/api/v1` URL and `NEXT_PUBLIC_GOOGLE_CLIENT_ID` if using
-  Google sign-in.
+  Google sign-in. **`GROQ_API_KEY` (and optionally `GROQ_MODEL`) must
+  also be set here** — `.env.local` only applies locally, and without it
+  in Vercel's environment variables every AI summarize/red-flag call
+  fails with a generic `"AI summary generation failed."` error. Vercel
+  only picks up new/changed env vars on the next deploy, so redeploy
+  after adding them.
 - **Google Cloud Console.** Add your Vercel URL under **Authorized
   JavaScript origins** on the OAuth client — no redirect URI needed,
   since the frontend uses Google Identity Services' popup ID-token flow.
