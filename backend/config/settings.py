@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     "rest_framework_simplejwt.token_blacklist",
+    "storages",
     # Local apps
     "apps.accounts",
     "apps.profiles",
@@ -136,6 +137,31 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Uploaded files (portfolio images) go to S3-compatible object storage when
+# AWS_STORAGE_BUCKET_NAME is set — needed in production since most PaaS hosts
+# (Render included) have an ephemeral filesystem that wipes MEDIA_ROOT on
+# every deploy/restart. Works with AWS S3 or any S3-compatible host (e.g.
+# Cloudflare R2 — set AWS_S3_ENDPOINT_URL to the R2 endpoint). Falls back to
+# local disk when unset, so local dev needs no extra setup.
+AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "")
+
+if AWS_STORAGE_BUCKET_NAME:
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+    AWS_S3_ENDPOINT_URL = os.getenv("AWS_S3_ENDPOINT_URL") or None
+    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "auto")
+    # Set this to a CDN/public-bucket domain if the host doesn't serve the
+    # bucket directly at its endpoint (e.g. an R2 public bucket URL).
+    AWS_S3_CUSTOM_DOMAIN = os.getenv("AWS_S3_CUSTOM_DOMAIN") or None
+    AWS_DEFAULT_ACL = None  # R2 and most S3-compatible hosts reject per-object ACLs
+    AWS_QUERYSTRING_AUTH = False  # public bucket — plain URLs, no expiring signed params
+    AWS_S3_FILE_OVERWRITE = False
+
+    STORAGES = {
+        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

@@ -33,10 +33,25 @@ services:
       - key: JWT_REFRESH_TOKEN_LIFETIME
         value: "7"
       # Google OAuth — leave blank until real credentials exist; the
-      # backend falls back to email/password-only auth without these.
+      # backend falls back to email/password-only auth without this.
+      # (No client secret needed — see apps.accounts.views.GoogleAuthView.)
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
+      # Media storage (portfolio images) — S3-compatible object storage.
+      # Leave AWS_STORAGE_BUCKET_NAME blank to fall back to local disk,
+      # which Render's ephemeral filesystem wipes on every deploy/restart.
+      # See DEPLOYMENT.md §1.4 for a Cloudflare R2 walkthrough.
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_S3_REGION_NAME
+        value: auto
+      - key: AWS_S3_CUSTOM_DOMAIN
         sync: false
       - key: POSTGRES_DB
         fromDatabase:

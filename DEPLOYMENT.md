@@ -57,18 +57,47 @@ Generate `SECRET_KEY` with:
 python -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
-### 1.4 Known gap — media storage
+### 1.4 Media storage (portfolio image uploads)
 
-`MEDIA_ROOT` currently points at local disk (`backend/media/`). Most PaaS
-hosts (Render free tier, Railway, etc.) have an **ephemeral filesystem** —
-uploaded portfolio images will vanish on the next deploy/restart unless
-you either:
-- attach a persistent volume at `backend/media/`, or
-- switch to S3-compatible storage (`django-storages` + an S3/R2/Spaces
-  bucket) — not currently configured, would need adding to
-  `backend/config/settings.py` and `requirements.txt`
+Most PaaS hosts (Render free tier, Railway, etc.) have an **ephemeral
+filesystem** — without object storage, uploaded portfolio images vanish on
+the next deploy/restart. `django-storages` is already wired into
+`backend/config/settings.py`: it uses S3-compatible object storage when
+`AWS_STORAGE_BUCKET_NAME` is set, and falls back to local disk
+(`backend/media/`) when it isn't — so this is opt-in, not required to get a
+first deploy running, but do it before relying on portfolio images sticking
+around.
 
-Pick one before real users start uploading portfolio images.
+**Cloudflare R2** (recommended — S3-compatible API, 10GB free, no egress
+fees):
+
+1. Cloudflare dashboard → **R2 Object Storage** → **Create bucket**. Name it
+   (e.g. `signature-media`), any region.
+2. Bucket → **Settings** → **Public access** → allow public read access (or
+   connect a custom domain) so uploaded images are viewable without signed
+   URLs — the app sets `AWS_QUERYSTRING_AUTH = False`, so it expects a
+   public bucket. Note the public URL Cloudflare gives you (either the
+   `r2.dev` subdomain or your custom domain).
+3. Cloudflare dashboard → **R2** → **Manage API tokens** → **Create API
+   token** → permissions: **Object Read & Write**, scoped to this bucket.
+   Copy the **Access Key ID**, **Secret Access Key**, and the account's
+   **S3 API endpoint** (`https://<account-id>.r2.cloudflarestorage.com`).
+4. Set these env vars on the backend host (Render: same place as §1.3):
+   ```bash
+   AWS_STORAGE_BUCKET_NAME=signature-media
+   AWS_ACCESS_KEY_ID=<R2 access key id>
+   AWS_SECRET_ACCESS_KEY=<R2 secret access key>
+   AWS_S3_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+   AWS_S3_REGION_NAME=auto
+   AWS_S3_CUSTOM_DOMAIN=<the public bucket URL from step 2, no https://>
+   ```
+5. Redeploy the backend. Uploading a portfolio image should now return a
+   URL pointing at the R2 domain, not the backend's own host.
+
+Any other S3-compatible provider (AWS S3 itself, DigitalOcean Spaces,
+Backblaze B2) works the same way — just point `AWS_S3_ENDPOINT_URL` at that
+provider's endpoint (omit it entirely for real AWS S3, which doesn't need a
+custom endpoint).
 
 ### 1.5 Seed demo data (optional, for a populated first impression)
 
@@ -128,10 +157,11 @@ AI proxy work correctly.
       `GROQ_API_KEY` is set correctly
 - [ ] Test `/browse` returns real search results — confirms
       `NEXT_PUBLIC_API_URL` is pointed correctly and CORS is open
-- [ ] Decide on the media storage question (§1.4) before relying on
-      portfolio image uploads in production
-- [ ] Google OAuth is still stubbed (disabled button) — needs a real
-      Google Cloud OAuth client ID/secret if you want that live
+- [ ] Set up R2/S3 media storage (§1.4) before relying on portfolio image
+      uploads in production — without it, uploads vanish on next deploy
+- [ ] Google sign-in is live — needs `GOOGLE_OAUTH_CLIENT_ID` set on the
+      backend and the deployed frontend URL added as an Authorized
+      JavaScript origin on the Google Cloud OAuth client
 
 ## 4. What's still local-only / not addressed here
 
