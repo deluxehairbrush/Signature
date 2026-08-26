@@ -12,7 +12,8 @@ services:
     dockerContext: ./backend
     plan: free
     healthCheckPath: /api/schema/
-    preDeployCommand: python manage.py migrate
+    # Free-tier services can't use preDeployCommand — migrations run at
+    # container start instead, via backend/entrypoint.sh.
     envVars:
       - key: SECRET_KEY
         generateValue: true
