@@ -14,9 +14,12 @@ import Logo from './Logo'
 import PillLink from './PillLink'
 import TiltCard from './TiltCard'
 import FloatingShape from './FloatingShape'
+import HeroCenterpiece from './HeroCenterpiece'
 import OpenBook from './OpenBook'
 import LineCallout from './LineCallout'
 import OrbitDiagram from './OrbitDiagram'
+import PyramidShape from './PyramidShape'
+import RingShape from './RingShape'
 import StepRuler from './StepRuler'
 import FilmstripRail from './FilmstripRail'
 import BottomPill from './BottomPill'
@@ -41,6 +44,25 @@ const clientFeatures = [
   'No account needed just to browse',
 ]
 
+const principles = [
+  {
+    title: 'Public by default',
+    body: 'A profile is only proof if anyone can check it. Nothing about a track record lives behind a login.',
+  },
+  {
+    title: 'Earned, not claimed',
+    body: 'Reputation comes from completed deals both sides confirmed — never a star you can leave for a stranger.',
+  },
+  {
+    title: 'No bidding wars',
+    body: 'This isn’t a race to the lowest rate. Rates are set once, up front, by the person doing the work.',
+  },
+  {
+    title: 'Boring on purpose',
+    body: 'No feeds, no engagement bait. Just a page that answers the one question that matters: can I trust this?',
+  },
+]
+
 
 const PANEL_COUNT = chapters.length
 
@@ -59,13 +81,13 @@ function Panel({
 }) {
   const center = index / (PANEL_COUNT - 1)
   const step = 1 / (PANEL_COUNT - 1)
-  const rotateY = useTransform(progress, [center - step, center, center + step], [16, 0, -16])
+  const rotateY = useTransform(progress, [center - step, center, center + step], [28, 0, -28])
   const opacity = useTransform(
     progress,
     [center - step, center - step * 0.5, center, center + step * 0.5, center + step],
-    [0.3, 1, 1, 1, 0.3],
+    [0.25, 1, 1, 1, 0.25],
   )
-  const scale = useTransform(progress, [center - step, center, center + step], [0.9, 1, 0.9])
+  const scale = useTransform(progress, [center - step, center, center + step], [0.82, 1, 0.82])
 
   return (
     <motion.div
@@ -149,17 +171,12 @@ export default function LandingExperience() {
 
           <motion.div style={{ x }} className="flex h-full">
             {/* Chapter 00 — Hero */}
-            <Panel index={0} progress={scrollYProgress} bg="ink" className="justify-center">
-              <ParallaxLayer strength={32} className="absolute right-[14%] top-[18%] hidden lg:block">
-                <FloatingShape size={140} duration={16} />
+            <Panel index={0} progress={scrollYProgress} bg="ink" className="justify-center overflow-hidden">
+              <HeroCenterpiece className="absolute -right-16 top-1/2 hidden h-[560px] w-[560px] -translate-y-1/2 lg:block xl:-right-6" />
+              <ParallaxLayer strength={20} className="absolute left-[8%] bottom-[14%] hidden lg:block">
+                <OpenBook size={110} />
               </ParallaxLayer>
-              <ParallaxLayer strength={18} className="absolute left-[10%] bottom-[24%] hidden lg:block">
-                <FloatingShape size={70} color="#F6F4EC" duration={11} delay={1.2} />
-              </ParallaxLayer>
-              <ParallaxLayer strength={44} className="absolute right-[6%] bottom-[16%] hidden lg:block">
-                <OpenBook size={130} />
-              </ParallaxLayer>
-              <div className="mx-auto max-w-3xl px-6 md:px-16">
+              <div className="relative mx-auto max-w-3xl px-6 md:px-16">
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -169,7 +186,7 @@ export default function LandingExperience() {
                   For freelancers and the people who hire them
                 </motion.p>
                 <KineticHeadline
-                  className="font-display text-6xl italic leading-[1.05] md:text-8xl"
+                  className="font-display text-7xl italic leading-[0.95] md:text-[7.5rem]"
                   lines={['Work you can trust.', 'Deals you can prove.']}
                 />
                 <p className="mt-8 max-w-xl text-lg text-paper/70">
@@ -231,8 +248,8 @@ export default function LandingExperience() {
             <Panel index={2} progress={scrollYProgress} bg="signal" className="justify-center">
               <div className="mx-auto grid w-full max-w-5xl grid-cols-1 items-center gap-16 px-6 md:grid-cols-2 md:px-16">
                 <div>
-                  <span className="font-display text-8xl italic text-paper/20">02</span>
-                  <h3 className="mt-4 font-display text-4xl italic">Create a profile</h3>
+                  <span className="font-display text-9xl italic text-paper/20 md:text-[11rem]">02</span>
+                  <h3 className="-mt-4 font-display text-4xl italic md:text-5xl">Create a profile</h3>
                   <p className="mt-4 max-w-md text-base leading-relaxed text-paper/70">
                     Freelancers list their work, rates, and availability. Clients
                     list what they need and their budget. Both take two minutes.
@@ -262,8 +279,8 @@ export default function LandingExperience() {
             {/* Chapter 03 — Get found, or go looking */}
             <Panel index={3} progress={scrollYProgress} bg="accent" className="justify-center">
               <div className="mx-auto w-full max-w-5xl px-6 md:px-16">
-                <span className="font-display text-8xl italic text-ink/20">03</span>
-                <h3 className="mt-4 font-display text-4xl italic text-ink">Get found, or go looking</h3>
+                <span className="font-display text-9xl italic text-ink/20 md:text-[11rem]">03</span>
+                <h3 className="-mt-4 font-display text-4xl italic text-ink md:text-5xl">Get found, or go looking</h3>
                 <div className="mt-10 grid grid-cols-2 gap-8 md:grid-cols-4">
                   {[
                     ['0', 'Login required to browse'],
@@ -278,8 +295,8 @@ export default function LandingExperience() {
                   ))}
                 </div>
               </div>
-              <ParallaxLayer strength={26} className="absolute right-[10%] top-[20%] hidden lg:block">
-                <FloatingShape size={130} color="#12120D" duration={15} />
+              <ParallaxLayer strength={40} className="absolute right-[10%] top-[20%] hidden lg:block">
+                <FloatingShape size={170} color="#12120D" duration={15} />
               </ParallaxLayer>
               <LineCallout
                 caption="Anyone can look. Only hiring needs an account."
@@ -291,8 +308,8 @@ export default function LandingExperience() {
             <Panel index={4} progress={scrollYProgress} bg="ink" className="justify-center">
               <div className="mx-auto grid w-full max-w-5xl grid-cols-1 items-center gap-8 px-6 md:grid-cols-2 md:px-16">
                 <div>
-                  <span className="font-display text-8xl italic text-paper/15">04</span>
-                  <h3 className="mt-4 font-display text-4xl italic">Build a record</h3>
+                  <span className="font-display text-9xl italic text-paper/15 md:text-[11rem]">04</span>
+                  <h3 className="-mt-4 font-display text-4xl italic md:text-5xl">Build a record</h3>
                   <p className="mt-4 max-w-md text-base leading-relaxed text-paper/60">
                     Every completed deal adds to a verifiable history: on-time
                     payments, fair compensation, both sides confirming the work
@@ -306,8 +323,8 @@ export default function LandingExperience() {
 
             {/* Chapter 05 — freelancer / client split */}
             <Panel index={5} progress={scrollYProgress} bg="paper" className="max-h-full justify-center overflow-y-auto py-24 md:overflow-visible md:py-0">
-              <FloatingShape size={90} color="#7C3AED" className="absolute left-[6%] top-[12%] hidden lg:block" duration={13} />
-              <OpenBook size={110} coverColor="#12120D" pageColor="#F6F4EC" className="absolute right-[6%] bottom-[10%] hidden lg:block" />
+              <FloatingShape size={120} color="#7C3AED" className="absolute left-[6%] top-[12%] hidden lg:block" duration={13} />
+              <OpenBook size={130} coverColor="#12120D" pageColor="#F6F4EC" className="absolute right-[6%] bottom-[10%] hidden lg:block" />
               <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-4 px-6 md:grid-cols-2 md:gap-8 md:px-16">
                 <TiltCard>
                   <div className="h-full rounded-2xl border border-ink/10 bg-white/50 p-5 md:rounded-3xl md:p-10">
@@ -373,16 +390,38 @@ export default function LandingExperience() {
               </div>
             </Panel>
 
-            {/* Chapter 07 — closing CTA */}
-            <Panel index={7} progress={scrollYProgress} bg="accent" className="justify-center">
-              <ParallaxLayer strength={30} className="absolute left-[10%] top-[16%] hidden lg:block">
-                <FloatingShape size={110} color="#12120D" duration={14} />
+            {/* Chapter 07 — why we built this */}
+            <Panel index={7} progress={scrollYProgress} bg="ink" className="justify-center overflow-hidden">
+              <RingShape size={420} color="#7C3AED" dotCount={14} tilt={64} className="absolute -right-24 top-1/2 hidden -translate-y-1/2 lg:block xl:-right-10" />
+              <ParallaxLayer strength={26} className="absolute left-[6%] bottom-[14%] hidden lg:block">
+                <PyramidShape size={90} color="#86C22A" duration={12} />
               </ParallaxLayer>
-              <ParallaxLayer strength={20} className="absolute right-[12%] bottom-[20%] hidden lg:block">
-                <FloatingShape size={70} color="#7C3AED" duration={10} delay={0.6} />
+              <div className="relative mx-auto w-full max-w-5xl px-6 md:px-16">
+                <span className="font-display text-9xl italic text-paper/15 md:text-[11rem]">07</span>
+                <h2 className="-mt-4 font-display text-4xl italic md:text-5xl">Why we built this</h2>
+                <div className="mt-8 grid grid-cols-1 gap-6 md:mt-14 md:grid-cols-2 md:gap-x-12 md:gap-y-10">
+                  {principles.map((p) => (
+                    <div key={p.title} className="border-t border-paper/15 pt-4">
+                      <h3 className="font-display text-xl italic text-accent md:text-2xl">{p.title}</h3>
+                      <p className="mt-2 max-w-sm text-sm leading-relaxed text-paper/65 md:text-base">
+                        {p.body}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Panel>
+
+            {/* Chapter 08 — closing CTA */}
+            <Panel index={8} progress={scrollYProgress} bg="accent" className="justify-center">
+              <ParallaxLayer strength={46} className="absolute left-[10%] top-[16%] hidden lg:block">
+                <FloatingShape size={150} color="#12120D" duration={14} />
               </ParallaxLayer>
-              <div className="mx-auto max-w-2xl px-6 text-center text-ink">
-                <h2 className="font-display text-5xl italic md:text-6xl">
+              <ParallaxLayer strength={32} className="absolute right-[12%] bottom-[18%] hidden lg:block">
+                <FloatingShape size={95} color="#7C3AED" duration={10} delay={0.6} />
+              </ParallaxLayer>
+              <div className="relative mx-auto max-w-2xl px-6 text-center text-ink">
+                <h2 className="font-display text-6xl italic md:text-8xl">
                   Ready to sign your name to it?
                 </h2>
                 <div className="mt-10 flex flex-wrap justify-center gap-4">

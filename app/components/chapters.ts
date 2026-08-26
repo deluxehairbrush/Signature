@@ -67,8 +67,16 @@ export const chapters: Chapter[] = [
     pill: 'See who’s already here',
   },
   {
-    key: 'cta',
+    key: 'principles',
     index: '07',
+    title: 'Why we built this',
+    range: 'What we stand for',
+    bg: 'ink',
+    pill: 'No shortcuts on trust',
+  },
+  {
+    key: 'cta',
+    index: '08',
     title: 'Sign your name to it',
     range: 'Get started',
     bg: 'accent',
