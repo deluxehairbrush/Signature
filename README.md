@@ -51,7 +51,7 @@ Demo accounts (password `demo1234`): `aisha@demo.com`, `james@techcorp.com`
            │                     └──────────┬───────────────┘
            │ same-origin                    │
            ▼                                ▼
-   /api/ai/summarize              Groq (Llama 3.3 70B)
+   /api/ai/summarize              Groq (openai/gpt-oss-120b)
    /api/ai/redflags               via lib/ai.ts, proxied from
    (lib/ai.ts, Groq-backed)       backend/apps/ai_integration
 ```
@@ -117,7 +117,7 @@ server-to-server, for use by other backend-side consumers.
 ### AI-assisted deal creation
 - Paste a chat conversation, or upload a screenshot (client-side OCR via
   tesseract.js — no server cost, works entirely in the browser)
-- AI extraction (Groq, Llama 3.3 70B) pulls out scope, price, currency,
+- AI extraction (Groq, openai/gpt-oss-120b) pulls out scope, price, currency,
   deadline, payment terms, and flags what it couldn't determine rather
   than guessing
 - Automatic red-flag detection (missing price, vague scope, unrealistic
@@ -187,7 +187,7 @@ drf-spectacular (OpenAPI docs), google-auth (Google Identity Services
 token verification), PostgreSQL (SQLite for local dev without Docker),
 optional S3-compatible object storage for uploaded media
 
-**AI:** Groq (Llama 3.3 70B Versatile) via the OpenAI-compatible SDK
+**AI:** Groq (`openai/gpt-oss-120b` by default, override via `GROQ_MODEL`) via the OpenAI-compatible SDK
 
 **Infra:** Vercel (frontend), Render (backend + Postgres) — both have a
 one-config deploy path, see [Deployment](#deployment)
@@ -247,7 +247,7 @@ npm install
 Create `.env.local`:
 ```bash
 GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=llama-3.3-70b-versatile   # optional, this is the default
+GROQ_MODEL=openai/gpt-oss-120b       # optional, this is the default
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=        # optional — leave blank to disable Google sign-in
 ```
