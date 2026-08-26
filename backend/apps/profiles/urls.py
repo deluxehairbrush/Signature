@@ -9,6 +9,7 @@ router = DefaultRouter()
 router.register(r"freelancers/profile", views.FreelancerProfileViewSet, basename="freelancer-profile")
 router.register(r"clients/profile", views.ClientProfileViewSet, basename="client-profile")
 router.register(r"social-links", views.SocialLinkViewSet, basename="social-links")
+router.register(r"shortlist", views.ShortlistViewSet, basename="shortlist")
 
 urlpatterns = [
     path("", include(router.urls)),

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthShell from '../components/AuthShell'
 import FormField from '../components/FormField'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 import { login, storeSession } from '../../lib/api'
 
 export default function LoginPage() {
@@ -77,14 +78,7 @@ export default function LoginPage() {
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
 
-        <button
-          type="button"
-          disabled
-          title="Google sign-in is coming soon"
-          className="flex w-full items-center justify-center gap-2 rounded-pill border border-paper/15 py-3 text-sm text-paper/40"
-        >
-          Continue with Google — coming soon
-        </button>
+        <GoogleSignInButton />
       </form>
     </AuthShell>
   )

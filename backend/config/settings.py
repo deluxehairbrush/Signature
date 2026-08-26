@@ -107,6 +107,12 @@ else:
 # ---------------------------------------------------------------------------
 AUTH_USER_MODEL = "accounts.User"
 
+# Google sign-in (Identity Services ID-token flow — see apps.accounts.views.
+# GoogleAuthView). Empty by default; that view returns 503 until a real
+# client ID from Google Cloud Console is set. The client secret is never
+# used by this flow and doesn't need to be configured here.
+GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

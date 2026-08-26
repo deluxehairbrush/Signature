@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.tags.serializers import TagSerializer
 
-from .models import ClientProfile, FreelancerProfile, SocialLink
+from .models import ClientProfile, FreelancerProfile, ShortlistEntry, SocialLink
 
 
 class SocialLinkSerializer(serializers.ModelSerializer):
@@ -85,3 +85,24 @@ class PublicClientSerializer(serializers.ModelSerializer):
 class ProfileCompletionSerializer(serializers.Serializer):
     completion_percentage = serializers.FloatField()
     missing_fields = serializers.ListField(child=serializers.CharField())
+
+
+class ShortlistEntrySerializer(serializers.ModelSerializer):
+    freelancer = PublicFreelancerSerializer(read_only=True)
+    # Write side: address the freelancer by username, same reasoning as
+    # Deal.freelancer — nothing public ever exposes a numeric id.
+    freelancer_username = serializers.SlugRelatedField(
+        source="freelancer",
+        slug_field="user__username",
+        queryset=FreelancerProfile.objects.all(),
+        write_only=True,
+    )
+
+    class Meta:
+        model = ShortlistEntry
+        fields = ["id", "freelancer", "freelancer_username", "created_at"]
+        read_only_fields = ["id", "freelancer", "created_at"]
+
+    def create(self, validated_data):
+        validated_data["client"] = self.context["request"].user
+        return super().create(validated_data)

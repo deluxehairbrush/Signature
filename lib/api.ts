@@ -93,6 +93,23 @@ export async function login(input: {
   return response.json()
 }
 
+export async function googleAuth(
+  idToken: string,
+  userType?: UserType,
+): Promise<{ user: AuthUser; tokens: AuthTokens; created: boolean }> {
+  const response = await safeFetch(`${API_BASE}/auth/google/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_token: idToken, user_type: userType }),
+  })
+
+  if (!response.ok) {
+    throw await parseError(response)
+  }
+
+  return response.json()
+}
+
 const TOKEN_STORAGE_KEY = 'signature.auth'
 
 export function storeSession(session: { user: AuthUser; tokens: AuthTokens }) {
@@ -114,6 +131,24 @@ export function readSession(): { user: AuthUser; tokens: AuthTokens } | null {
 export function clearSession() {
   if (typeof window === 'undefined') return
   window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+}
+
+// Blacklists the refresh token server-side, then always clears local
+// storage — even if the server call fails (token already expired/blacklisted,
+// backend unreachable), the user should still end up logged out locally.
+export async function logout(): Promise<void> {
+  const session = readSession()
+  if (session) {
+    try {
+      await authedFetch('/auth/logout/', {
+        method: 'POST',
+        body: JSON.stringify({ refresh: session.tokens.refresh }),
+      })
+    } catch {
+      // ignore — we still clear the local session below
+    }
+  }
+  clearSession()
 }
 
 async function authedFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -634,6 +669,7 @@ export type DealMessage = {
   sender: number
   sender_username: string
   body: string
+  attachment: string | null
   created_at: string
 }
 
@@ -643,13 +679,98 @@ export async function getDealMessages(dealId: number): Promise<DealMessage[]> {
   return data.messages
 }
 
-export async function sendDealMessage(dealId: number, body: string): Promise<DealMessage> {
-  const response = await authedFetch(`/deals/${dealId}/messages/`, {
-    method: 'POST',
-    body: JSON.stringify({ body }),
-  })
+export async function sendDealMessage(
+  dealId: number,
+  body: string,
+  attachment?: File | null,
+): Promise<DealMessage> {
+  let response
+  if (attachment) {
+    const formData = new FormData()
+    formData.set('body', body)
+    formData.set('attachment', attachment)
+    response = await authedFetch(`/deals/${dealId}/messages/`, { method: 'POST', body: formData })
+  } else {
+    response = await authedFetch(`/deals/${dealId}/messages/`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    })
+  }
   const data = await response.json()
   return data.message_obj
+}
+
+// ---------------------------------------------------------------------------
+// Disputes
+// ---------------------------------------------------------------------------
+
+export type DisputeOutcome = 'REFUND_CLIENT' | 'PROCEED_AS_IS' | 'CANCEL_DEAL'
+
+export type DealDispute = {
+  id: number
+  reason: string
+  raised_by_username: string
+  is_resolved: boolean
+  outcome: DisputeOutcome | ''
+  resolution_notes: string
+  resolved_by_username: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export async function getDealDispute(dealId: number): Promise<DealDispute | null> {
+  const response = await authedFetch(`/deals/${dealId}/dispute/`)
+  const data = await response.json()
+  return data.dispute
+}
+
+export async function raiseDealDispute(dealId: number, reason: string): Promise<DealDispute> {
+  const response = await authedFetch(`/deals/${dealId}/dispute/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+  const data = await response.json()
+  return data.dispute
+}
+
+export async function resolveDealDispute(
+  dealId: number,
+  input: { outcome: DisputeOutcome; resolution_notes?: string },
+): Promise<DealDispute> {
+  const response = await authedFetch(`/deals/${dealId}/resolve-dispute/`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  const data = await response.json()
+  return data.dispute
+}
+
+// ---------------------------------------------------------------------------
+// Client shortlist — saved-for-later freelancers
+// ---------------------------------------------------------------------------
+
+export type ShortlistEntry = {
+  id: number
+  freelancer: PublicFreelancerProfile
+  created_at: string
+}
+
+export async function listShortlist(): Promise<ShortlistEntry[]> {
+  const response = await authedFetch('/shortlist/')
+  const data = await response.json()
+  return data.results ?? data
+}
+
+export async function addToShortlist(freelancerUsername: string): Promise<ShortlistEntry> {
+  const response = await authedFetch('/shortlist/', {
+    method: 'POST',
+    body: JSON.stringify({ freelancer_username: freelancerUsername }),
+  })
+  return response.json()
+}
+
+export async function removeFromShortlist(id: number): Promise<void> {
+  await authedFetch(`/shortlist/${id}/`, { method: 'DELETE' })
 }
 
 // ---------------------------------------------------------------------------

@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import Link from 'next/link'
-import Logo from '../../components/Logo'
+import LogoLink from '../../components/LogoLink'
 import PillLink from '../../components/PillLink'
 import { getPublicClient, type PublicClientProfile, type ApiError } from '../../../lib/api'
 
@@ -23,9 +22,7 @@ export default function ClientPublicProfile() {
   return (
     <main className="min-h-screen bg-paper text-ink">
       <header className="flex items-center justify-between px-6 py-4 md:px-10">
-        <Link href="/">
-          <Logo invert={false} />
-        </Link>
+        <LogoLink invert={false} />
         <PillLink href="/browse" variant="light">
           Browse more
         </PillLink>

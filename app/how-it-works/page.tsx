@@ -1,5 +1,5 @@
-import Link from 'next/link'
-import Logo from '../components/Logo'
+import AccountNav from '../components/AccountNav'
+import LogoLink from '../components/LogoLink'
 import PillLink from '../components/PillLink'
 
 const steps = [
@@ -24,12 +24,12 @@ export default function HowItWorksPage() {
   return (
     <main className="min-h-screen bg-paper text-ink">
       <header className="flex items-center justify-between px-6 py-4 md:px-10">
-        <Link href="/">
-          <Logo invert={false} />
-        </Link>
-        <PillLink href="/signup" variant="dark">
-          Get started
-        </PillLink>
+        <LogoLink invert={false} />
+        <AccountNav variant="light">
+          <PillLink href="/signup" variant="dark">
+            Get started
+          </PillLink>
+        </AccountNav>
       </header>
 
       <div className="mx-auto max-w-3xl px-6 py-16 md:px-10">

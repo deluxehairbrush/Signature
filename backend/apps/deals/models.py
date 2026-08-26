@@ -122,7 +122,8 @@ class DealMessage(models.Model):
 
     deal = models.ForeignKey(Deal, on_delete=models.CASCADE, related_name="messages")
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    body = models.TextField()
+    body = models.TextField(blank=True)
+    attachment = models.FileField(upload_to="deal_attachments/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -130,6 +131,41 @@ class DealMessage(models.Model):
 
     def __str__(self):
         return f"{self.sender.username} on {self.deal.title}: {self.body[:40]}"
+
+
+class DealDispute(models.Model):
+    """A dispute raised on a deal, and (eventually) how it was resolved.
+
+    One per deal — if it's reopened after resolution that's an edge case
+    this scope doesn't handle.
+    """
+
+    class Outcome(models.TextChoices):
+        REFUND_CLIENT = "REFUND_CLIENT", "Refund the client"
+        PROCEED_AS_IS = "PROCEED_AS_IS", "Proceed with the work as-is"
+        CANCEL_DEAL = "CANCEL_DEAL", "Cancel the deal"
+
+    deal = models.OneToOneField(Deal, on_delete=models.CASCADE, related_name="dispute")
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="raised_disputes"
+    )
+    reason = models.TextField()
+    is_resolved = models.BooleanField(default=False)
+    outcome = models.CharField(max_length=20, choices=Outcome.choices, blank=True)
+    resolution_notes = models.TextField(blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_disputes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        state = "resolved" if self.is_resolved else "open"
+        return f"Dispute on {self.deal.title} ({state})"
 
 
 class Notification(models.Model):
@@ -142,6 +178,7 @@ class Notification(models.Model):
         COMPLETED = "COMPLETED", "Deal completed"
         CANCELLED = "CANCELLED", "Deal cancelled"
         DISPUTED = "DISPUTED", "Deal disputed"
+        DISPUTE_RESOLVED = "DISPUTE_RESOLVED", "Dispute resolved"
         APPLIED = "APPLIED", "Freelancer applied"
         MESSAGE = "MESSAGE", "New message"
 

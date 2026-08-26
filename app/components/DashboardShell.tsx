@@ -1,5 +1,5 @@
-import Link from 'next/link'
-import Logo from './Logo'
+import LogoLink from './LogoLink'
+import LogoutButton from './LogoutButton'
 import NotificationBell from './NotificationBell'
 import type { ReactNode } from 'react'
 
@@ -17,12 +17,11 @@ export default function DashboardShell({
   return (
     <main className="min-h-screen bg-paper text-ink">
       <header className="flex items-center justify-between gap-3 px-6 py-4 md:px-10">
-        <Link href="/">
-          <Logo invert={false} />
-        </Link>
+        <LogoLink invert={false} />
         <div className="flex items-center gap-3">
           {action}
           <NotificationBell />
+          <LogoutButton />
         </div>
       </header>
 

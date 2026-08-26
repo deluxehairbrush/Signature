@@ -1,0 +1,59 @@
+databases:
+  - name: signature-db
+    plan: free
+    databaseName: signature_db
+    user: signature_user
+
+services:
+  - type: web
+    name: signature-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/schema/
+    preDeployCommand: python manage.py migrate
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      # Render assigns a subdomain like signature-backend.onrender.com —
+      # the leading dot lets Django's ALLOWED_HOSTS match any subdomain.
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
+      # Fill these in after the frontend is deployed (Vercel URL).
+      - key: FRONTEND_URL
+        sync: false
+      - key: AI_SERVICE_URL
+        sync: false
+      - key: JWT_ACCESS_TOKEN_LIFETIME
+        value: "30"
+      - key: JWT_REFRESH_TOKEN_LIFETIME
+        value: "7"
+      # Google OAuth — leave blank until real credentials exist; the
+      # backend falls back to email/password-only auth without these.
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: signature-db
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: signature-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: signature-db
+          property: password
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: signature-db
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: signature-db
+          property: port

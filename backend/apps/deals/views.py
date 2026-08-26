@@ -10,11 +10,12 @@ from apps.reputation.services import (
     recalculate_reputation,
 )
 
-from .models import CompletionConfirmation, Deal, DealMessage, Notification
+from .models import CompletionConfirmation, Deal, DealDispute, DealMessage, Notification
 from .serializers import (
     CompletionConfirmationSerializer,
     DealCreateSerializer,
     DealDetailSerializer,
+    DealDisputeSerializer,
     DealListSerializer,
     DealMessageSerializer,
     NotificationSerializer,
@@ -186,10 +187,27 @@ class DealViewSet(viewsets.ModelViewSet):
         notify(other, deal, Notification.Verb.CANCELLED, f'"{deal.title}" was cancelled.')
         return Response({"success": True, "deal": DealDetailSerializer(deal).data})
 
-    @action(detail=True, methods=["post"], url_path="dispute")
+    @action(detail=True, methods=["get", "post"], url_path="dispute")
     def dispute(self, request, pk=None):
-        """POST /api/v1/deals/{id}/dispute/"""
+        """GET/POST /api/v1/deals/{id}/dispute/
+
+        GET returns the dispute record (or null if none). POST raises one
+        — a reason is required, and it moves the deal to DISPUTED.
+        """
         deal = self.get_object()
+
+        if request.method == "GET":
+            existing = getattr(deal, "dispute", None)
+            return Response(
+                {"success": True, "dispute": DealDisputeSerializer(existing).data if existing else None}
+            )
+
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            return Response(
+                {"success": False, "error": {"code": "REASON_REQUIRED", "message": "A reason is required to raise a dispute."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
             transition_deal(deal, "DISPUTED")
             process_deal_dispute(deal)
@@ -199,9 +217,87 @@ class DealViewSet(viewsets.ModelViewSet):
                 {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        dispute, _ = DealDispute.objects.update_or_create(
+            deal=deal,
+            defaults={
+                "raised_by": request.user,
+                "reason": reason,
+                "is_resolved": False,
+                "outcome": "",
+                "resolution_notes": "",
+                "resolved_by": None,
+                "resolved_at": None,
+            },
+        )
+
         other = deal.freelancer if request.user == deal.client else deal.client
-        notify(other, deal, Notification.Verb.DISPUTED, f'"{deal.title}" was disputed.')
-        return Response({"success": True, "deal": DealDetailSerializer(deal).data})
+        notify(other, deal, Notification.Verb.DISPUTED, f'"{deal.title}" was disputed: {reason[:120]}')
+        deal.refresh_from_db()
+        return Response(
+            {"success": True, "deal": DealDetailSerializer(deal).data, "dispute": DealDisputeSerializer(dispute).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="resolve-dispute")
+    def resolve_dispute(self, request, pk=None):
+        """POST /api/v1/deals/{id}/resolve-dispute/
+
+        Either participant can resolve an open dispute with an outcome:
+        refund the client, proceed with the work as-is, or cancel the
+        deal outright. Whoever resolves it is trusted at face value —
+        there's no separate moderator/admin role in this scope.
+        """
+        deal = self.get_object()
+        dispute = getattr(deal, "dispute", None)
+        if dispute is None:
+            return Response(
+                {"success": False, "error": {"code": "NO_DISPUTE", "message": "This deal has no dispute to resolve."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if dispute.is_resolved:
+            return Response(
+                {"success": False, "error": {"code": "ALREADY_RESOLVED", "message": "This dispute is already resolved."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        outcome = request.data.get("outcome")
+        if outcome not in DealDispute.Outcome.values:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_OUTCOME",
+                    "message": f"outcome must be one of: {', '.join(DealDispute.Outcome.values)}"}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from django.utils import timezone as dj_timezone
+
+        dispute.is_resolved = True
+        dispute.outcome = outcome
+        dispute.resolution_notes = request.data.get("resolution_notes", "")
+        dispute.resolved_by = request.user
+        dispute.resolved_at = dj_timezone.now()
+        dispute.save()
+
+        target_status = "ACTIVE" if outcome == DealDispute.Outcome.PROCEED_AS_IS else "CANCELLED"
+        try:
+            transition_deal(deal, target_status)
+        except InvalidTransition as e:
+            return Response(
+                {"success": False, "error": {"code": "INVALID_STATUS_TRANSITION", "message": str(e)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if target_status == "CANCELLED":
+            process_deal_cancellation(deal)
+        recalculate_reputation(deal)
+
+        other = deal.freelancer if request.user == deal.client else deal.client
+        notify(
+            other, deal, Notification.Verb.DISPUTE_RESOLVED,
+            f'Dispute on "{deal.title}" resolved: {dispute.get_outcome_display()}.',
+        )
+        deal.refresh_from_db()
+        return Response(
+            {"success": True, "deal": DealDetailSerializer(deal).data, "dispute": DealDisputeSerializer(dispute).data}
+        )
 
     @action(detail=True, methods=["post"], url_path="apply")
     def apply(self, request, pk=None):

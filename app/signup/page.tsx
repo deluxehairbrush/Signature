@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import AuthShell from '../components/AuthShell'
 import FormField from '../components/FormField'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 import { register, storeSession, type UserType } from '../../lib/api'
 
 function SignupForm() {
@@ -137,14 +138,13 @@ function SignupForm() {
           {loading ? 'Creating your profile…' : 'Create profile'}
         </button>
 
-        <button
-          type="button"
-          disabled
-          title="Google sign-in is coming soon"
-          className="flex w-full items-center justify-center gap-2 rounded-pill border border-paper/15 py-3 text-sm text-paper/40"
-        >
-          Continue with Google — coming soon
-        </button>
+        <div className="flex items-center gap-3 text-xs uppercase tracking-widest text-paper/30">
+          <span className="h-px flex-1 bg-paper/15" />
+          or
+          <span className="h-px flex-1 bg-paper/15" />
+        </div>
+
+        <GoogleSignInButton userType={userType} />
       </form>
     </AuthShell>
   )

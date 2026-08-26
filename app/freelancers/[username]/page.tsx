@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import Link from 'next/link'
-import Logo from '../../components/Logo'
+import LogoLink from '../../components/LogoLink'
 import PillLink from '../../components/PillLink'
 import {
+  addToShortlist,
   getPublicFreelancer,
   getPublicPortfolio,
   getPublicReputation,
+  listShortlist,
+  readSession,
+  removeFromShortlist,
   type PublicFreelancerProfile,
   type PublicPortfolioItem,
   type Reputation,
@@ -21,6 +24,17 @@ const AVAILABILITY_LABEL: Record<string, string> = {
   UNAVAILABLE: 'Not taking work right now',
 }
 
+// Social links don't have a "this is my contact method" flag — platform is
+// just where the URL points, and a WhatsApp/email link can be filed under
+// WEBSITE or OTHER (see the "https://wa.me/... or mailto:..." placeholder on
+// the profile editor). Prefer an actual contact-capable URL over whichever
+// link happens to be first.
+function pickContactLink(links: PublicFreelancerProfile['social_links']) {
+  if (links.length === 0) return null
+  const direct = links.find((l) => l.url.startsWith('mailto:') || l.url.includes('wa.me'))
+  return direct ?? links[0]
+}
+
 export default function FreelancerPublicProfile() {
   const params = useParams<{ username: string }>()
   const [profile, setProfile] = useState<PublicFreelancerProfile | null>(null)
@@ -28,6 +42,9 @@ export default function FreelancerPublicProfile() {
   const [reputation, setReputation] = useState<Reputation | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [shortlistEntryId, setShortlistEntryId] = useState<number | null>(null)
+  const [shortlistBusy, setShortlistBusy] = useState(false)
+  const isClient = readSession()?.user.user_type === 'CLIENT'
 
   useEffect(() => {
     getPublicFreelancer(params.username)
@@ -36,14 +53,39 @@ export default function FreelancerPublicProfile() {
       .finally(() => setLoading(false))
     getPublicPortfolio(params.username).then(setPortfolio).catch(() => {})
     getPublicReputation(params.username).then(setReputation).catch(() => {})
-  }, [params.username])
+    if (isClient) {
+      listShortlist()
+        .then((entries) => {
+          const match = entries.find((e) => e.freelancer.username === params.username)
+          setShortlistEntryId(match ? match.id : null)
+        })
+        .catch(() => {})
+    }
+  }, [params.username, isClient])
+
+  async function toggleShortlist() {
+    setShortlistBusy(true)
+    try {
+      if (shortlistEntryId) {
+        await removeFromShortlist(shortlistEntryId)
+        setShortlistEntryId(null)
+      } else {
+        const entry = await addToShortlist(params.username)
+        setShortlistEntryId(entry.id)
+      }
+    } catch {
+      // no-op — shortlist toggle failures aren't worth surfacing an error banner for
+    } finally {
+      setShortlistBusy(false)
+    }
+  }
+
+  const contactLink = profile ? pickContactLink(profile.social_links) : null
 
   return (
     <main className="min-h-screen bg-paper text-ink">
       <header className="flex items-center justify-between px-6 py-4 md:px-10">
-        <Link href="/">
-          <Logo invert={false} />
-        </Link>
+        <LogoLink invert={false} />
         <PillLink href="/browse" variant="light">
           Browse more
         </PillLink>
@@ -96,20 +138,28 @@ export default function FreelancerPublicProfile() {
               </div>
             )}
 
-            <div className="mt-8 flex flex-wrap gap-8 rounded-2xl border border-ink/10 bg-white/50 p-6">
-              <div>
-                <p className="font-display text-3xl italic">{profile.reputation_score}</p>
-                <p className="text-xs text-muted">Reputation score</p>
+            {profile.completed_deals > 0 ? (
+              <div className="mt-8 flex flex-wrap gap-8 rounded-2xl border border-ink/10 bg-white/50 p-6">
+                <div>
+                  <p className="font-display text-3xl italic">{profile.reputation_score}</p>
+                  <p className="text-xs text-muted">Reputation score</p>
+                </div>
+                <div>
+                  <p className="font-display text-3xl italic">{profile.completed_deals}</p>
+                  <p className="text-xs text-muted">Deals completed</p>
+                </div>
+                <div>
+                  <p className="font-display text-3xl italic">{profile.successful_deals}</p>
+                  <p className="text-xs text-muted">Successful deals</p>
+                </div>
               </div>
-              <div>
-                <p className="font-display text-3xl italic">{profile.completed_deals}</p>
-                <p className="text-xs text-muted">Deals completed</p>
+            ) : (
+              <div className="mt-8 rounded-2xl border border-dashed border-ink/15 bg-white/30 p-6">
+                <p className="text-sm text-muted">
+                  New here — no completed deals yet. A track record builds up as deals close.
+                </p>
               </div>
-              <div>
-                <p className="font-display text-3xl italic">{profile.successful_deals}</p>
-                <p className="text-xs text-muted">Successful deals</p>
-              </div>
-            </div>
+            )}
 
             {reputation && reputation.completed_deals > 0 && (
               <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl border border-ink/10 bg-white/30 p-6 sm:grid-cols-4">
@@ -176,9 +226,18 @@ export default function FreelancerPublicProfile() {
               <PillLink href={`/deals/new?freelancer=${profile.username}`} variant="dark">
                 Hire {profile.display_name || profile.full_name}
               </PillLink>
-              {profile.social_links.length > 0 && (
+              {isClient && (
+                <button
+                  onClick={toggleShortlist}
+                  disabled={shortlistBusy}
+                  className="inline-flex items-center rounded-pill border border-ink/15 px-6 py-3 text-sm hover:border-ink/40 disabled:opacity-50"
+                >
+                  {shortlistEntryId ? '★ Saved' : '☆ Save to shortlist'}
+                </button>
+              )}
+              {contactLink && (
                 <a
-                  href={profile.social_links[0].url}
+                  href={contactLink.url}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center rounded-pill border border-ink/15 px-6 py-3 text-sm hover:border-ink/40"

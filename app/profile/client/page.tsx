@@ -102,6 +102,9 @@ export default function ClientProfilePage() {
           <PillLink href="/deals" variant="light">
             Your deals
           </PillLink>
+          <PillLink href="/shortlist" variant="light">
+            Shortlist
+          </PillLink>
           {username && (
             <PillLink href={`/clients/${username}`} variant="light">
               View public profile

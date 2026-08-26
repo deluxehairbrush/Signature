@@ -102,5 +102,24 @@ class SocialLink(models.Model):
         ordering = ["platform"]
         unique_together = ["freelancer", "platform"]
 
+
+class ShortlistEntry(models.Model):
+    """A freelancer a client has saved to compare/consider later."""
+
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="shortlist_entries"
+    )
+    freelancer = models.ForeignKey(
+        FreelancerProfile, on_delete=models.CASCADE, related_name="shortlisted_by"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ["client", "freelancer"]
+
+    def __str__(self):
+        return f"{self.client.username} -> {self.freelancer.user.username}"
+
     def __str__(self):
         return f"{self.platform}: {self.url}"

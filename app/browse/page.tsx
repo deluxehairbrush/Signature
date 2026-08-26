@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Logo from '../components/Logo'
+import AccountNav from '../components/AccountNav'
+import LogoLink from '../components/LogoLink'
 import PillLink from '../components/PillLink'
 import { searchFreelancers, type AvailabilityStatus, type PublicFreelancerProfile } from '../../lib/api'
 
@@ -39,12 +40,12 @@ export default function BrowsePage() {
   return (
     <main className="min-h-screen bg-paper text-ink">
       <header className="flex items-center justify-between px-6 py-4 md:px-10">
-        <Link href="/">
-          <Logo invert={false} />
-        </Link>
-        <PillLink href="/signup" variant="dark">
-          Get started
-        </PillLink>
+        <LogoLink invert={false} />
+        <AccountNav variant="light">
+          <PillLink href="/signup" variant="dark">
+            Get started
+          </PillLink>
+        </AccountNav>
       </header>
 
       <div className="mx-auto max-w-5xl px-6 py-16 md:px-10">
@@ -88,6 +89,8 @@ export default function BrowsePage() {
             {error} — is the backend running?
           </div>
         )}
+
+        {loading && <p className="mt-10 text-muted">Loading…</p>}
 
         {!error && !loading && profiles.length === 0 && (
           <p className="mt-10 text-muted">No freelancers match that search.</p>

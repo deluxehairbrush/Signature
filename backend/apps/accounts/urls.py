@@ -7,6 +7,7 @@ app_name = "accounts"
 urlpatterns = [
     path("register/", views.RegisterView.as_view(), name="register"),
     path("login/", views.LoginView.as_view(), name="login"),
+    path("google/", views.GoogleAuthView.as_view(), name="google-auth"),
     path("token/refresh/", views.TokenRefreshView.as_view(), name="token-refresh"),
     path("logout/", views.LogoutView.as_view(), name="logout"),
     path("me/", views.MeView.as_view(), name="me"),

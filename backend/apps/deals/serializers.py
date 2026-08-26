@@ -4,7 +4,7 @@ from rest_framework import serializers
 from apps.tags.models import Tag
 from apps.tags.serializers import TagSerializer
 
-from .models import CompletionConfirmation, Deal, DealMessage, DealSnapshot, Notification
+from .models import CompletionConfirmation, Deal, DealDispute, DealMessage, DealSnapshot, Notification
 
 User = get_user_model()
 
@@ -123,13 +123,33 @@ class DealMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DealMessage
-        fields = ["id", "deal", "sender", "sender_username", "body", "created_at"]
+        fields = ["id", "deal", "sender", "sender_username", "body", "attachment", "created_at"]
         read_only_fields = ["id", "deal", "sender", "sender_username", "created_at"]
+
+    def validate(self, attrs):
+        if not attrs.get("body", "").strip() and not attrs.get("attachment"):
+            raise serializers.ValidationError("A message needs text, an attachment, or both.")
+        return attrs
 
     def create(self, validated_data):
         validated_data["sender"] = self.context["request"].user
         validated_data["deal"] = self.context["view"].get_object()
         return super().create(validated_data)
+
+
+class DealDisputeSerializer(serializers.ModelSerializer):
+    raised_by_username = serializers.CharField(source="raised_by.username", read_only=True)
+    resolved_by_username = serializers.CharField(
+        source="resolved_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = DealDispute
+        fields = [
+            "id", "reason", "raised_by_username", "is_resolved", "outcome",
+            "resolution_notes", "resolved_by_username", "created_at", "resolved_at",
+        ]
+        read_only_fields = fields
 
 
 class NotificationSerializer(serializers.ModelSerializer):

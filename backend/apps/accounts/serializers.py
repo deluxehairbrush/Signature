@@ -69,6 +69,18 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
+class GoogleAuthSerializer(serializers.Serializer):
+    # A Google Identity Services ID token (JWT), verified server-side —
+    # never the client secret, which stays backend-only and unused by this
+    # flow (ID-token verification only needs the client ID as audience).
+    id_token = serializers.CharField()
+    # Only required the first time (account creation) — a returning user
+    # is looked up by the email already in the verified token.
+    user_type = serializers.ChoiceField(
+        choices=["FREELANCER", "CLIENT"], required=False
+    )
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(write_only=True)
     new_password = serializers.CharField(

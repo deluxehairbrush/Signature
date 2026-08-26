@@ -9,6 +9,7 @@ import {
   useTransform,
   type MotionValue,
 } from 'framer-motion'
+import AccountNav from './AccountNav'
 import Logo from './Logo'
 import PillLink from './PillLink'
 import TiltCard from './TiltCard'
@@ -106,18 +107,20 @@ export default function LandingExperience() {
       <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between px-6 py-4 md:px-10">
         <Logo className={isLight ? 'text-ink' : 'text-paper'} invert={!isLight} />
         <div className="flex items-center gap-3">
-          <PillLink
-            href="/login"
-            variant="light"
-            className={`!hidden !bg-transparent hover:!opacity-70 md:!inline-flex ${
-              isLight ? '!border-ink/20 !text-ink' : '!border-paper/20 !text-paper'
-            }`}
-          >
-            Sign in
-          </PillLink>
-          <PillLink href="/signup" variant="dark" className={isLight ? '' : '!bg-accent !text-ink'}>
-            Get started
-          </PillLink>
+          <AccountNav variant={isLight ? 'light' : 'dark'}>
+            <PillLink
+              href="/login"
+              variant="light"
+              className={`!hidden !bg-transparent hover:!opacity-70 md:!inline-flex ${
+                isLight ? '!border-ink/20 !text-ink' : '!border-paper/20 !text-paper'
+              }`}
+            >
+              Sign in
+            </PillLink>
+            <PillLink href="/signup" variant="dark" className={isLight ? '' : '!bg-accent !text-ink'}>
+              Get started
+            </PillLink>
+          </AccountNav>
           <button
             onClick={() => setMenuOpen(true)}
             aria-label="Open chapter menu"

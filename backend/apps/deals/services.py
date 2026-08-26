@@ -13,9 +13,16 @@ from apps.deals.models import DealSnapshot
 VALID_TRANSITIONS = {
     "DRAFT": {"PROPOSED"},
     "PROPOSED": {"ACCEPTED", "CANCELLED"},
-    "ACCEPTED": {"ACTIVE", "CANCELLED"},
+    # DISPUTED is reachable from ACCEPTED too — the frontend already offers
+    # a "raise a dispute" action at that status (e.g. the freelancer never
+    # started, or terms fell apart before work began), so the backend state
+    # machine needs to allow what the UI already promises.
+    "ACCEPTED": {"ACTIVE", "CANCELLED", "DISPUTED"},
     "ACTIVE": {"COMPLETED", "DISPUTED"},
-    "DISPUTED": {"COMPLETED", "CANCELLED"},
+    # ACTIVE is reachable from DISPUTED via a "proceed as-is" resolution
+    # (see DealViewSet.resolve_dispute) — work resumes instead of the deal
+    # just being force-cancelled or completed.
+    "DISPUTED": {"COMPLETED", "CANCELLED", "ACTIVE"},
     "COMPLETED": set(),
     "CANCELLED": set(),
 }

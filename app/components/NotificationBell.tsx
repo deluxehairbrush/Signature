@@ -11,12 +11,16 @@ import {
 
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!readSession()) return
-    listNotifications().then(setNotifications).catch(() => {})
+    listNotifications()
+      .then(setNotifications)
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
@@ -56,7 +60,8 @@ export default function NotificationBell() {
 
       {open && (
         <div className="absolute right-0 top-12 z-20 w-80 rounded-2xl border border-ink/10 bg-paper p-2 shadow-xl">
-          {notifications.length === 0 && (
+          {loading && <p className="p-4 text-sm text-muted">Loading…</p>}
+          {!loading && notifications.length === 0 && (
             <p className="p-4 text-sm text-muted">Nothing yet.</p>
           )}
           {notifications.slice(0, 10).map((n) => (

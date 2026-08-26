@@ -5,12 +5,13 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import ClientProfile, FreelancerProfile, SocialLink
+from .models import ClientProfile, FreelancerProfile, ShortlistEntry, SocialLink
 from .serializers import (
     ClientProfileSerializer,
     FreelancerProfileSerializer,
     PublicClientSerializer,
     PublicFreelancerSerializer,
+    ShortlistEntrySerializer,
     SocialLinkSerializer,
 )
 from .services import calculate_client_profile_completion, calculate_profile_completion
@@ -117,3 +118,35 @@ class SocialLinkViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         profile = FreelancerProfile.objects.get(user=self.request.user)
         serializer.save(freelancer=profile)
+
+
+class ShortlistViewSet(viewsets.ModelViewSet):
+    """A client's saved-for-later freelancers.
+
+    List/create/destroy only — there's nothing to update on a saved entry.
+    """
+
+    serializer_class = ShortlistEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_queryset(self):
+        return ShortlistEntry.objects.filter(
+            client=self.request.user
+        ).select_related("freelancer", "freelancer__user").prefetch_related(
+            "freelancer__tags", "freelancer__social_links"
+        )
+
+    def create(self, request, *args, **kwargs):
+        if getattr(request.user, "user_type", None) != "CLIENT":
+            return Response(
+                {"success": False, "error": {"code": "NOT_CLIENT", "message": "Only client accounts can shortlist freelancers."}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        username = request.data.get("freelancer_username")
+        existing = self.get_queryset().filter(freelancer__user__username=username).first()
+        if existing:
+            return Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
+
+        return super().create(request, *args, **kwargs)
